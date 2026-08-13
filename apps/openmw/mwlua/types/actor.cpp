@@ -537,11 +537,16 @@ namespace MWLua
                 ESM::RefId::deserializeText(recordId));
         };
 
+        // Queued like every other mutation: the counter is a map the main thread writes
+        // to whenever an actor finishes dying, and Lua runs alongside it.
         actor["setDeathCount"] = [context](std::string_view recordId, int count) {
             if (context.mType != Context::Global)
                 throw std::runtime_error("Can only be used in global scripts.");
-            MWBase::Environment::get().getMechanicsManager()->setDeathCount(
-                ESM::RefId::deserializeText(recordId), count);
+            context.mLuaManager->addAction(
+                [id = ESM::RefId::deserializeText(recordId), count] {
+                    MWBase::Environment::get().getMechanicsManager()->setDeathCount(id, count);
+                },
+                "SetDeathCountAction");
         };
 
         addActorStatsBindings(actor, context);
