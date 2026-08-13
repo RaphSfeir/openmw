@@ -1036,7 +1036,11 @@ namespace MWMechanics
             stats.setTimeToStartDrowning(fHoldBreathTime);
     }
 
-    static void updateEquippedLight(const MWWorld::Ptr& ptr, float duration, bool mayEquip)
+    // manageEquipment is false for an actor whose AI a script has taken over: the engine
+    // must not re-decide what such an actor is holding, or it fights the script driving
+    // it. Everything else here (fuel, extinguishing in water) still applies.
+    static void updateEquippedLight(
+        const MWWorld::Ptr& ptr, float duration, bool mayEquip, bool manageEquipment = true)
     {
         const bool isPlayer = (ptr == getPlayer());
 
@@ -1048,7 +1052,7 @@ namespace MWMechanics
         /**
          * Automatically equip NPCs torches at night and unequip them at day
          */
-        if (!isPlayer)
+        if (!isPlayer && manageEquipment)
         {
             auto torchIter = std::find_if(std::begin(inventoryStore), std::end(inventoryStore), [&](auto entry) {
                 return entry.getType() == ESM::Light::sRecordId && entry.getClass().canBeEquipped(entry, ptr).first;
@@ -1653,7 +1657,8 @@ namespace MWMechanics
                         updateDrowning(actor.getPtr(), duration, ctrl.isKnockedOut(), isPlayer);
                     }
                     if (mTimerUpdateEquippedLight == 0 && actor.getPtr().getClass().hasInventoryStore(actor.getPtr()))
-                        updateEquippedLight(actor.getPtr(), updateEquippedLightInterval, showTorches);
+                        updateEquippedLight(actor.getPtr(), updateEquippedLightInterval, showTorches,
+                            !(luaControls && luaControls->mDisableAI));
 
                     if (luaControls != nullptr && isConscious(actor.getPtr()))
                         updateLuaControls(actor.getPtr(), isPlayer, *luaControls);
