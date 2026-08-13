@@ -200,6 +200,8 @@ namespace MWLua
         // Pumped once per frame at the start of synchronizedUpdate().
         Net::Session& netSession() { return mNetSession; }
 
+        bool isNetSessionActive() const override { return mNetSession.getRole() != Net::Role::None; }
+
         void sendLocalEvent(
             const MWWorld::Ptr& target, const std::string& name, const std::optional<sol::table>& data = std::nullopt);
 

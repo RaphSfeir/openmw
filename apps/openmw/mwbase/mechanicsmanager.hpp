@@ -103,6 +103,9 @@ namespace MWBase
         virtual int countDeaths(const ESM::RefId& id) const = 0;
         ///< Return the number of deaths for actors with the given ID.
 
+        virtual void setDeathCount(const ESM::RefId& id, int count) = 0;
+        ///< Overwrite the death count (multiplayer: kept identical across clients).
+
         /// Check if \a observer is potentially aware of \a ptr. Does not do a line of sight check!
         virtual bool awarenessCheck(const MWWorld::Ptr& ptr, const MWWorld::Ptr& observer, bool useCache = true) = 0;
 

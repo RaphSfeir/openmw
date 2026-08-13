@@ -517,6 +517,33 @@ namespace MWLua
             return ptr.getClass().getCreatureStats(ptr).getHitRecovery();
         };
 
+        // Raising health above zero does not clear the dead flag, so without this a
+        // dead actor can never be brought back from a script.
+        actor["resurrect"] = [context](const Object& object) {
+            if (!object.isGObject() && !object.isSelfObject())
+                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
+            context.mLuaManager->addAction(
+                [obj = Object(object)] {
+                    MWBase::Environment::get().getMechanicsManager()->resurrect(obj.ptr());
+                },
+                "ResurrectAction");
+        };
+
+        // Death counts drive quest conditions ("Dead", GetDeadCount) but only increment
+        // on a client that actually simulated the death, so they need to be readable
+        // and writable to stay identical between multiplayer clients.
+        actor["getDeathCount"] = [](std::string_view recordId) {
+            return MWBase::Environment::get().getMechanicsManager()->countDeaths(
+                ESM::RefId::deserializeText(recordId));
+        };
+
+        actor["setDeathCount"] = [context](std::string_view recordId, int count) {
+            if (context.mType != Context::Global)
+                throw std::runtime_error("Can only be used in global scripts.");
+            MWBase::Environment::get().getMechanicsManager()->setDeathCount(
+                ESM::RefId::deserializeText(recordId), count);
+        };
+
         addActorStatsBindings(actor, context);
         addActorMagicBindings(actor, context);
     }

@@ -284,7 +284,10 @@ bool OMW::Engine::frame(unsigned frameNumber, float frametime)
             if (mStateManager->getState() == MWBase::StateManager::State_Running)
             {
                 MWWorld::Ptr player = mWorld->getPlayerPtr();
-                if (!paused && player.getClass().getCreatureStats(player).isDead())
+                // In a multiplayer session the mod owns player death (downed state,
+                // revival by a peer); ending the game would drop everyone's session.
+                if (!paused && player.getClass().getCreatureStats(player).isDead()
+                    && !mLuaManager->isNetSessionActive())
                     mStateManager->endGame();
             }
         }

@@ -215,6 +215,27 @@ namespace MWLua
             return objects;
         };
 
+        // Kinematic placement: put an actor exactly where it is told, every frame if
+        // needed. `teleport` is the wrong tool for continuous correction (it resets
+        // momentum, re-runs cell placement and marks the actor as teleported), and
+        // steering an actor there with movement controls has no pathfinding, so a
+        // mirrored actor wedges against furniture. Position stays authoritative here
+        // while movement controls keep driving the animation.
+        api["setActorPosition"]
+            = [context](const GObject& object, const osg::Vec3f& pos, sol::optional<float> yaw) {
+                  context.mLuaManager->addAction(
+                      [object, pos, yaw] {
+                          const MWWorld::Ptr ptr = object.ptr();
+                          if (!ptr.getClass().isActor())
+                              throw std::runtime_error("Actor expected");
+                          MWBase::World* world = MWBase::Environment::get().getWorld();
+                          world->moveObject(ptr, pos, true, true);
+                          if (yaw)
+                              world->rotateObject(ptr, osg::Vec3f(0, 0, *yaw), MWBase::RotationFlag_none);
+                      },
+                      "SetActorPositionAction");
+              };
+
         // Creates a new record in the world database.
         api["createRecord"] = sol::overload(
             [lua = context.mLua](const ESM::Activator& activator) -> const ESM::Activator* {

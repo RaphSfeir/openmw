@@ -190,6 +190,11 @@ namespace MWBase
             = 0;
 
         virtual std::string formatResourceUsageStats() const = 0;
+
+        // True while a multiplayer session is running. Engine behaviours that assume a
+        // single local player owning the game state (ending the game when that player
+        // dies) defer to the multiplayer layer instead.
+        virtual bool isNetSessionActive() const { return false; }
     };
 
 }

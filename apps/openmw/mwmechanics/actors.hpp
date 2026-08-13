@@ -106,6 +106,11 @@ namespace MWMechanics
         int countDeaths(const ESM::RefId& id) const;
         ///< Return the number of deaths for actors with the given ID.
 
+        void setDeathCount(const ESM::RefId& id, int count);
+        ///< Overwrite the death count. Quest conditions ("Dead", GetDeadCount) read it,
+        ///< and it only increments on clients that simulated the death, so a
+        ///< multiplayer layer needs to keep it identical everywhere.
+
         bool isAttackPreparing(const MWWorld::Ptr& ptr) const;
         bool isRunning(const MWWorld::Ptr& ptr) const;
         bool isSneaking(const MWWorld::Ptr& ptr) const;

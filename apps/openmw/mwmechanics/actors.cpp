@@ -1839,7 +1839,10 @@ namespace MWMechanics
                 if (isPlayer)
                 {
                     // player's death animation is over
-                    MWBase::Environment::get().getStateManager()->askLoadRecent();
+                    // In a multiplayer session the mod handles this instead (the
+                    // load-a-save prompt would tear down the session).
+                    if (!MWBase::Environment::get().getLuaManager()->isNetSessionActive())
+                        MWBase::Environment::get().getStateManager()->askLoadRecent();
                 }
                 else
                 {
@@ -2022,6 +2025,11 @@ namespace MWMechanics
             : 1.0f;
 
         return static_cast<int>(std::ceil(std::max(1.f, std::max(healthHours, magickaHours))));
+    }
+
+    void Actors::setDeathCount(const ESM::RefId& id, int count)
+    {
+        mDeathCount[id] = count;
     }
 
     int Actors::countDeaths(const ESM::RefId& id) const
