@@ -280,6 +280,21 @@ if (NOT OPENMW_USE_SYSTEM_ICU)
     set(ICU_LIBRARIES ICU::i18n ICU::uc ICU::data PARENT_SCOPE)
 endif()
 
+# ENet — transport for the multiplayer network session (components/net)
+include(FetchContent)
+FetchContent_Declare(enet
+    URL https://github.com/lsalzman/enet/archive/refs/tags/v1.3.18.tar.gz
+    URL_HASH SHA512=a0d2fa8c957704dd49e00a726284ac5ca034b50b00d2b20a94fa1bbfbb80841467834bfdc84aa0ed0d6aab894608fd6c86c3b94eee46343f0e6d9c22e391dbf9
+    SOURCE_DIR fetched/enet
+)
+FetchContent_MakeAvailable(enet)
+# enet's own CMakeLists uses directory-level include_directories and only links
+# winsock for MinGW, so wire both up for consumers here.
+target_include_directories(enet INTERFACE ${enet_SOURCE_DIR}/include)
+if(WIN32)
+    target_link_libraries(enet winmm ws2_32)
+endif()
+
 if ((BUILD_COMPONENTS_TESTS OR BUILD_OPENCS_TESTS OR BUILD_OPENMW_TESTS) AND NOT OPENMW_USE_SYSTEM_GOOGLETEST)
 
     include(FetchContent)

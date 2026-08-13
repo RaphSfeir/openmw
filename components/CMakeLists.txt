@@ -67,6 +67,10 @@ add_component_dir (l10n
     messagebundles manager
     )
 
+add_component_dir (net
+    session
+    )
+
 add_component_dir (settings
     categories
     categories/camera
@@ -637,6 +641,8 @@ else()
 endif()
 
 target_link_libraries(components ${BULLET_LIBRARIES})
+
+target_link_libraries(components enet)
 
 if (USE_QT)
     add_library(components_qt STATIC ${COMPONENT_QT_FILES})

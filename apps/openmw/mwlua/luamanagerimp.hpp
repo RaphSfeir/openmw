@@ -13,6 +13,7 @@
 #include <components/lua/storage.hpp>
 #include <components/lua_ui/resources.hpp>
 #include <components/misc/color.hpp>
+#include <components/net/session.hpp>
 
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -195,6 +196,10 @@ namespace MWLua
         LuaUtil::InputAction::Registry& inputActions() { return mInputActions; }
         LuaUtil::InputTrigger::Registry& inputTriggers() { return mInputTriggers; }
 
+        // Multiplayer network session, exposed to Lua as the `openmw.network` package.
+        // Pumped once per frame at the start of synchronizedUpdate().
+        Net::Session& netSession() { return mNetSession; }
+
         void sendLocalEvent(
             const MWWorld::Ptr& target, const std::string& name, const std::optional<sol::table>& data = std::nullopt);
 
@@ -273,6 +278,8 @@ namespace MWLua
         LuaUtil::InputTrigger::Registry mInputTriggers;
 
         LuaUtil::ScriptTracker mScriptTracker;
+
+        Net::Session mNetSession;
     };
 
 }

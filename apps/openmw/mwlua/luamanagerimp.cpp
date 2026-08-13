@@ -313,6 +313,9 @@ namespace MWLua
 
     void LuaManager::synchronizedUpdateUnsafe()
     {
+        // Flush queued sends and collect received packets before any script handlers run,
+        // so the global scripts' receive loop sees this frame's messages.
+        mNetSession.pump();
         if (mNewGameStarted)
         {
             mNewGameStarted = false;
