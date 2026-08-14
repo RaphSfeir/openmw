@@ -1608,7 +1608,13 @@ namespace MWMechanics
                         return; // for now abort update of the old cell when cell changes by teleportation magic effect
                                 // a better solution might be to apply cell changes at the end of the frame
                     }
-                    if (aiActive && inProcessingRange)
+                    // An actor whose AI is disabled through Lua is behaviourally inert on this
+                    // machine: its conduct is authored elsewhere and arrives through its
+                    // controls. Without this, the ambient behaviour layer keeps running
+                    // locally — combat seeking, head tracking, crime pursuit — and a remotely
+                    // driven body visibly splits from a locally computed attitude.
+                    const bool aiInert = luaControls && luaControls->mDisableAI;
+                    if (aiActive && inProcessingRange && !aiInert)
                     {
                         if (engageCombatTimerStatus == Misc::TimerStatus::Elapsed)
                         {

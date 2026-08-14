@@ -24,6 +24,7 @@
 
 #include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -1209,6 +1210,15 @@ namespace MWMechanics
         const MWWorld::Ptr& actor, const MWWorld::Ptr& victim, std::set<MWWorld::Ptr>& playerFollowers)
     {
         if (actor == getPlayer() || !actor.getClass().isNpc() || actor.getClass().getCreatureStats(actor).isDead())
+            return false;
+
+        // An actor whose AI is disabled through Lua is not a person here — it is a
+        // remotely driven body. It must not witness anything: a crime seen only by
+        // such a stand-in would otherwise become a real, reported crime that never
+        // had a witness on any machine.
+        const MWBase::LuaManager::ActorControls* luaControls
+            = MWBase::Environment::get().getLuaManager()->getActorControls(actor);
+        if (luaControls && luaControls->mDisableAI)
             return false;
 
         if (actor.getClass().getCreatureStats(actor).getAiSequence().isInCombat(victim))
