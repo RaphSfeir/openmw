@@ -29,6 +29,7 @@ option(DEPLOY_QT_TRANSLATIONS "Deploy standard Qt translations to resources fold
 
 # Apps and tools
 option(BUILD_OPENMW             "Build OpenMW" ON)
+option(BUILD_MP_SERVER          "Build the multiplayer dedicated server" ON)
 option(BUILD_LAUNCHER           "Build Launcher" ON)
 option(BUILD_WIZARD             "Build Installation Wizard" ON)
 option(BUILD_MWINIIMPORTER      "Build MWiniImporter" ON)
@@ -672,6 +673,10 @@ add_subdirectory (components)
 # Apps and tools
 if (BUILD_OPENMW OR BUILD_OPENMW_TESTS)
     add_subdirectory( apps/openmw )
+endif()
+
+if (BUILD_MP_SERVER)
+    add_subdirectory( apps/openmw-mp-server )
 endif()
 
 if (BUILD_BSATOOL)
