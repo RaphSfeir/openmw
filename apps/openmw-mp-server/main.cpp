@@ -92,6 +92,29 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // The campaign is opened before a single peer is answered: a client that
+    // connected first and started changing things would be writing into a
+    // registry that was not open yet.
+    sol::protected_function start = server["start"];
+    if (start.valid())
+    {
+        sol::protected_function_result opened = start(config.mCampaign, config.mTimescale);
+        if (!opened.valid())
+        {
+            sol::error err = opened;
+            std::cerr << "start: " << err.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        if (opened.get_type() == sol::type::boolean && !opened.get<bool>())
+        {
+            // A campaign that refused to open (wrong content list, wrong
+            // format) must stop the server rather than quietly begin a
+            // different world under the same name.
+            std::cerr << "refusing to run: the campaign could not be opened" << std::endl;
+            return EXIT_FAILURE;
+        }
+    }
+
     sol::protected_function update = server["update"];
     sol::protected_function shutdown = server["shutdown"];
     if (!update.valid())
