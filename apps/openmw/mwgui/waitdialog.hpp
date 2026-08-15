@@ -15,6 +15,13 @@ namespace MWGui
 
         void onOpen() override;
 
+        // Nameable from Lua like every other window. Without an id it cannot be
+        // disabled, and a mod that replaces the rest dialogue is left with this
+        // bar floating over its own window: the mode shows it, and the only
+        // code that hides it is WaitDialog::onOpen, which a disabled window
+        // never runs.
+        std::string_view getWindowIdForLua() const override { return "WaitDialogProgressBar"; }
+
         void setProgress(int cur, int total);
 
     protected:
