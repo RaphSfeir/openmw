@@ -18,6 +18,7 @@
 #include "markupbindings.hpp"
 #include "menuscripts.hpp"
 #include "nearbybindings.hpp"
+#include "campaignbindings.hpp"
 #include "networkbindings.hpp"
 #include "objectbindings.hpp"
 #include "postprocessingbindings.hpp"
@@ -48,6 +49,7 @@ namespace MWLua
         initObjectBindingsForGlobalScripts(context);
         initCellBindingsForGlobalScripts(context);
         return {
+            { "openmw.campaign", initCampaignPackage(context) },
             { "openmw.core", initCorePackage(context) },
             { "openmw.network", initNetworkPackage(context) },
             { "openmw.types", initTypesPackage(context) },

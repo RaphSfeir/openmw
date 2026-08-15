@@ -50,6 +50,10 @@ namespace MWLua
         void loadPermanentStorage(const std::filesystem::path& userConfigPath);
         void savePermanentStorage(const std::filesystem::path& userConfigPath) override;
 
+        // Where per-user files live; remembered at storage load so the campaign
+        // file bindings (openmw.campaign) can write next to global_storage.bin.
+        const std::filesystem::path& userConfigPath() const { return mUserConfigPath; }
+
         // \brief Executes lua handlers. Defaults to running in parallel with OSG Cull.
         //
         // The OSG Cull is expensive enough that we have "free" time to
@@ -275,6 +279,7 @@ namespace MWLua
 
         LuaUtil::LuaStorage mGlobalStorage;
         LuaUtil::LuaStorage mPlayerStorage;
+        std::filesystem::path mUserConfigPath;
 
         LuaUtil::InputAction::Registry mInputActions;
         LuaUtil::InputTrigger::Registry mInputTriggers;

@@ -178,6 +178,7 @@ namespace MWLua
 
     void LuaManager::loadPermanentStorage(const std::filesystem::path& userConfigPath)
     {
+        mUserConfigPath = userConfigPath;
         mPlayerStorage.setActive(true);
         mGlobalStorage.setActive(true);
         const auto globalPath = userConfigPath / "global_storage.bin";
