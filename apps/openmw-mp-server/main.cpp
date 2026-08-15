@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     sol::protected_function start = server["start"];
     if (start.valid())
     {
-        sol::protected_function_result opened = start(config.mCampaign, config.mTimescale);
+        sol::protected_function_result opened = start(config.mCampaign, config.mTimescale, config.mPassword);
         if (!opened.valid())
         {
             sol::error err = opened;
