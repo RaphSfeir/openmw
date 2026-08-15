@@ -1356,6 +1356,16 @@
 -- for _, player in ipairs(world.players) do player.type.addTopic(player, "Some Unrelated Work") end
 
 ---
+-- Every topic the player currently knows, as a list of topic ids. The counterpart
+-- of @{#PLAYER.addTopic}: unlike @{#PlayerJournal.topics}, which only names topics
+-- the player has already heard a line about, this is the set that decides what can
+-- be asked of an actor.
+-- @function [parent=#PLAYER] getKnownTopics
+-- @param openmw.core#GameObject player
+-- @return #list<#string>
+-- @usage local known = types.Player.getKnownTopics(player)
+
+---
 -- Returns @{#PlayerJournal}, which contains the read-only access to journal text data accumulated by the player.
 -- Not the same as @{openmw_core#Dialogue.journal} which holds raw game records: with placeholders for dynamic variables and no player-specific info.
 -- @function [parent=#PLAYER] journal

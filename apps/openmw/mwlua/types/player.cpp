@@ -417,6 +417,20 @@ namespace MWLua
 
             MWBase::Environment::get().getDialogueManager()->addTopic(topic);
         };
+        // The counterpart of addTopic. types.Player.journal(p).topics only
+        // names topics the player has HEARD a line about, and a topic is
+        // usually made available long before it is asked — so it is not a
+        // substitute for the known set. Multiplayer needs the real one: known
+        // topics live in a savegame, and a session never loads one, so
+        // whatever is not carried across by hand is gone at the next launch.
+        player["getKnownTopics"] = [](const Object& object, sol::this_state lua) {
+            verifyPlayer(object);
+            sol::table res(lua, sol::create);
+            int i = 1;
+            for (const ESM::RefId& topic : MWBase::Environment::get().getDialogueManager()->getKnownTopics())
+                res[i++] = topic.serializeText();
+            return res;
+        };
         player["sendMenuEvent"] = [context](const Object& object, std::string eventName, const sol::object& eventData) {
             verifyPlayer(object);
             context.mLuaEvents->addMenuEvent({ std::move(eventName), LuaUtil::serialize(eventData) });

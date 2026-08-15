@@ -3,6 +3,7 @@
 
 #include <list>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -58,6 +59,13 @@ namespace MWBase
         virtual bool inJournal(const ESM::RefId& topicId, const ESM::RefId& infoId) const = 0;
 
         virtual void addTopic(const ESM::RefId& topic) = 0;
+
+        /// Every topic the player knows, regardless of who they are talking to.
+        /// getAvailableTopics() answers only for the actor in the current
+        /// conversation, which cannot tell a caller what the player knows in
+        /// general — needed by multiplayer, where this set has to be carried
+        /// between sessions that never load a savegame.
+        virtual const std::set<ESM::RefId>& getKnownTopics() const = 0;
 
         virtual void addChoice(std::string_view text, int choice) = 0;
         virtual const std::vector<std::pair<std::string, int>>& getChoices() const = 0;
