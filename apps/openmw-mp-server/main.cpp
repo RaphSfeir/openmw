@@ -123,7 +123,24 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // requestHost is a REQUEST: it is executed by the next pump(), not here. So the
+    // bind has to be pumped and then CHECKED before anything is announced. Printing
+    // "listening on port N" first was a lie the one time it mattered — with the port
+    // already taken, the server said it was listening, logged a quiet failure line,
+    // and went on ticking forever with no socket. Clients then reached the OTHER
+    // server on that port, which is how a test run ended up writing into a campaign
+    // somebody was playing.
     session.requestHost(config.mPort, config.mMaxPeers);
+    session.pump();
+    if (session.getRole() != Net::Role::Host || !session.isConnected())
+    {
+        std::string why = session.getLastError();
+        if (why.empty())
+            why = "the port could not be opened";
+        std::cerr << "openmw-mp-server: cannot listen on port " << config.mPort << ": " << why
+                  << "\n(another server is probably already running on that port)" << std::endl;
+        return EXIT_FAILURE;
+    }
     std::cout << "openmw-mp-server: listening on port " << config.mPort << ", campaign \""
               << config.mCampaign << "\", " << config.mContent.size() << " content file(s)" << std::endl;
 
