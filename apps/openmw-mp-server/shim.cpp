@@ -51,6 +51,7 @@ namespace MPServer
                 throw std::runtime_error("network.connect: the dedicated server never joins a session");
             };
             api["disconnect"] = [&session]() { session.requestDisconnect(); };
+            api["kick"] = [&session](std::uint32_t peer) { session.requestKick(peer); };
             api["state"] = [&session](sol::this_state s) {
                 sol::state_view view(s);
                 sol::table state(view, sol::create);

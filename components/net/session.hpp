@@ -51,6 +51,9 @@ namespace Net
         void requestHost(std::uint16_t port, unsigned maxPeers);
         void requestConnect(std::string address, std::uint16_t port);
         void requestDisconnect();
+        // Host only: drop one peer, gracefully, so anything already queued for
+        // them (a refusal and its reason) still reaches them first.
+        void requestKick(std::uint32_t peer);
 
         // State snapshot, updated by pump().
         Role getRole() const;

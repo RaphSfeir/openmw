@@ -41,7 +41,15 @@ namespace Net
         {
         };
 
-        using ControlRequest = std::variant<HostRequest, ConnectRequest, DisconnectRequest>;
+        // Drop ONE peer, host only. Ending a whole session is a different thing
+        // and has its own request; this is what a server needs to be able to
+        // turn somebody away and mean it.
+        struct KickRequest
+        {
+            std::uint32_t mPeer;
+        };
+
+        using ControlRequest = std::variant<HostRequest, ConnectRequest, DisconnectRequest, KickRequest>;
 
         struct Outgoing
         {
@@ -161,6 +169,24 @@ namespace Net
             teardown();
             if (wasActive)
                 pushEvent(Event{ Event::Type::Disconnect, sServerPeerId, 0, {} });
+        }
+
+        // One peer, gone. Host only — a client has exactly one connection and
+        // ending it is requestDisconnect. Deliberately the graceful form:
+        // disconnect_now would drop the link before the queued reason has left
+        // the wire, so the peer would be turned away without ever being told
+        // why. ENet delivers the disconnect event itself, so the session's own
+        // bookkeeping happens on the ordinary path rather than here.
+        void doKick(std::uint32_t id)
+        {
+            if (mLiveRole != Role::Host || mHost == nullptr)
+                return;
+            const auto it = mPeers.find(id);
+            if (it == mPeers.end())
+                return;
+            enet_host_flush(mHost);
+            enet_peer_disconnect(it->second, 0);
+            enet_host_flush(mHost);
         }
 
         std::uint32_t peerId(ENetPeer* peer) const
@@ -323,6 +349,12 @@ namespace Net
         mImpl->mControlQueue.push_back(DisconnectRequest{});
     }
 
+    void Session::requestKick(std::uint32_t peer)
+    {
+        std::lock_guard lock(mImpl->mMutex);
+        mImpl->mControlQueue.push_back(KickRequest{ peer });
+    }
+
     Role Session::getRole() const
     {
         std::lock_guard lock(mImpl->mMutex);
@@ -385,6 +417,8 @@ namespace Net
                 mImpl->startHost(std::get<HostRequest>(request));
             else if (std::holds_alternative<ConnectRequest>(request))
                 mImpl->startConnect(std::get<ConnectRequest>(request));
+            else if (std::holds_alternative<KickRequest>(request))
+                mImpl->doKick(std::get<KickRequest>(request).mPeer);
             else
                 mImpl->doDisconnect();
         }
