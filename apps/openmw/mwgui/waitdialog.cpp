@@ -109,6 +109,19 @@ namespace MWGui
         const bool canSleep = !ptr.isEmpty() || (restFlags & MWBase::World::Rest_CanSleep) != 0;
         setCanRest(canSleep);
 
+        /*
+            mp addition: when a Lua script has replaced this window, it is
+            invisible — but this focus grab still armed it. MyGUI key focus on
+            the hidden buttons ate arrows/Enter/Space before Lua ever saw them,
+            and Enter CLICKED the invisible Wait button (keyboard navigation
+            does not check visibility): a full vanilla time-skip — advanceTime,
+            instant heal, autosave — executed underneath the replacement
+            window. The refusal checks above are wanted either way; the focus
+            is only wanted when the window is really there.
+        */
+        if (isDisabledByLua())
+            return;
+
         if (mUntilHealedButton->getVisible())
             MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mUntilHealedButton);
         else

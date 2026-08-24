@@ -77,6 +77,12 @@ namespace MWGui
 
         virtual std::string_view getWindowIdForLua() const { return {}; }
         void setDisabledByLua(bool disabled) { mDisabledByLua = disabled; }
+        /*
+            mp addition: a window replaced from Lua still runs its setPtr (the
+            refusal checks in it are wanted), but it must not act on the input
+            side while invisible — see WaitDialog::setPtr.
+        */
+        bool isDisabledByLua() const { return mDisabledByLua; }
 
         static void clampWindowCoordinates(MyGUI::Window* window);
 
