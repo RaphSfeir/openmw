@@ -30,6 +30,10 @@ namespace MPServer
         std::string mPassword;
         double mTimescale = 30.0;
         unsigned mTickHz = 60;
+        // Death rule for the whole session: true = downed state, a companion can
+        // revive, bleeding out is the death; false = classic instant death, wake
+        // in the temple. A world rule, so the machine keeping the world owns it.
+        bool mRevive = true;
 
         // Reads a key=value file, then applies command-line overrides. Returns
         // false and explains itself when the result could not run.

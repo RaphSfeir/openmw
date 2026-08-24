@@ -59,6 +59,8 @@ namespace MPServer
                     out.mTimescale = std::stod(value);
                 else if (key == "tick")
                     out.mTickHz = static_cast<unsigned>(std::stoi(value));
+                else if (key == "revive")
+                    out.mRevive = !(value == "false" || value == "0" || value == "no");
             }
         }
     }
@@ -78,7 +80,8 @@ namespace MPServer
             ("content", bpo::value<std::vector<std::string>>()->composing(), "content file, in load order; repeatable")
             ("password", bpo::value<std::string>(), "join password")
             ("timescale", bpo::value<double>(), "game hours per real hour ratio")
-            ("tick", bpo::value<int>(), "server ticks per second");
+            ("tick", bpo::value<int>(), "server ticks per second")
+            ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death");
         // clang-format on
 
         bpo::variables_map vm;
@@ -123,6 +126,11 @@ namespace MPServer
             out.mTimescale = vm["timescale"].as<double>();
         if (vm.count("tick"))
             out.mTickHz = static_cast<unsigned>(vm["tick"].as<int>());
+        if (vm.count("revive"))
+        {
+            const std::string v = vm["revive"].as<std::string>();
+            out.mRevive = !(v == "false" || v == "0" || v == "no");
+        }
 
         if (out.mScriptDir.empty())
         {
