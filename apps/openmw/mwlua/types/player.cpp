@@ -401,6 +401,22 @@ namespace MWLua
                 throw std::runtime_error("Only player and global scripts can toggle teleportation.");
             MWBase::Environment::get().getWorld()->enableTeleporting(state);
         };
+        // mp addition: rename the character. The record write is exactly what the
+        // chargen name dialog performs (MechanicsManager::setPlayerName), so every
+        // piece of UI that shows the name — inventory, stats, tooltips — follows.
+        // Queued like every other Lua mutation.
+        player["setName"] = [context](const Object& object, std::string_view name) {
+            verifyPlayer(object);
+            if (object.isLObject() && !object.isSelfObject())
+                throw std::runtime_error("Only player and global scripts can rename the player.");
+            if (name.empty())
+                throw std::runtime_error("The player's name cannot be empty.");
+            context.mLuaManager->addAction(
+                [newName = std::string(name)] {
+                    MWBase::Environment::get().getMechanicsManager()->setPlayerName(newName);
+                },
+                "setNameAction");
+        };
         player["addTopic"] = [](const Object& object, std::string_view topicId) {
             verifyPlayer(object);
 

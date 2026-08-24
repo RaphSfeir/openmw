@@ -14,6 +14,7 @@
 #include "../mwworld/player.hpp"
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/world.hpp"
 
 namespace MWMechanics
@@ -178,6 +179,31 @@ namespace MWMechanics
 
         if (index == 0 && mDynamic[index].getCurrent() < 1)
         {
+            /*
+                mp addition: during a network session the LOCAL PLAYER cannot die.
+
+                Every health write funnels through here, and this branch is where
+                the dead flag flips — one line below is the point of no return:
+                death animation, corpse semantics, and (on the other machines) a
+                dead puppet nobody can activate for a revive. Suppressing only the
+                game-over screens (the earlier gate) still let all of that happen
+                for the frame before script recovery ran. So the player is floored
+                just UNDER alive instead: the Lua layer reads "below 1" as a
+                mortal wound and turns it into the downed state at exactly 1.
+                Everyone else — NPCs, creatures, other machines' puppets of this
+                player — dies exactly as before.
+            */
+            if (!mDead && MWBase::Environment::get().getLuaManager() != nullptr
+                && MWBase::Environment::get().getLuaManager()->isNetSessionActive())
+            {
+                const MWWorld::Ptr player = MWBase::Environment::get().getWorld()->getPlayerPtr();
+                if (!player.isEmpty() && this == &player.getClass().getCreatureStats(player))
+                {
+                    mDynamic[index].setCurrent(0.5f);
+                    return;
+                }
+            }
+
             if (!mDead)
                 mTimeOfDeath = MWBase::Environment::get().getWorld()->getTimeStamp();
 
