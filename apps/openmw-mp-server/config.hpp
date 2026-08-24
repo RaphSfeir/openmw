@@ -39,6 +39,12 @@ namespace MPServer
         // makes an hour of rest take a full in-game hour at default timescale.
         // A world rule, same ownership as the death rule.
         double mRestSecondsPerHour = 4.0;
+        // One-shot maintenance: wipe the campaign's journal stages, kill
+        // counts and mwscript globals, and forget stored character positions
+        // (stats/inventory kept) — a fresh quest run for the same characters.
+        // Command-line only, NEVER a cfg key: a wipe forgotten in a config
+        // file would erase the story on every launch.
+        bool mResetJournal = false;
 
         // Reads a key=value file, then applies command-line overrides. Returns
         // false and explains itself when the result could not run.

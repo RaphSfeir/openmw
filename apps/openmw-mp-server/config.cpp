@@ -84,7 +84,8 @@ namespace MPServer
             ("timescale", bpo::value<double>(), "game hours per real hour ratio")
             ("tick", bpo::value<int>(), "server ticks per second")
             ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death")
-            ("restSecondsPerHour", bpo::value<double>(), "real seconds per rested game hour (default 4; 120 = an hour of rest takes an in-game hour at default timescale)");
+            ("restSecondsPerHour", bpo::value<double>(), "real seconds per rested game hour (default 4; 120 = an hour of rest takes an in-game hour at default timescale)")
+            ("reset-journal", "one-shot: clear every journal stage, kill count and mwscript global from the campaign, and forget stored character positions (characters keep stats, spells and inventory); then serve as usual");
         // clang-format on
 
         bpo::variables_map vm;
@@ -136,6 +137,8 @@ namespace MPServer
         }
         if (vm.count("restSecondsPerHour"))
             out.mRestSecondsPerHour = vm["restSecondsPerHour"].as<double>();
+        if (vm.count("reset-journal"))
+            out.mResetJournal = true;
 
         if (out.mScriptDir.empty())
         {
