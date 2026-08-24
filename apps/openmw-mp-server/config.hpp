@@ -34,6 +34,11 @@ namespace MPServer
         // revive, bleeding out is the death; false = classic instant death, wake
         // in the temple. A world rule, so the machine keeping the world owns it.
         bool mRevive = true;
+        // Real seconds a rested game hour costs (rest never skips the shared
+        // clock — recovery is paid for in real time). 4 keeps rest snappy; 120
+        // makes an hour of rest take a full in-game hour at default timescale.
+        // A world rule, same ownership as the death rule.
+        double mRestSecondsPerHour = 4.0;
 
         // Reads a key=value file, then applies command-line overrides. Returns
         // false and explains itself when the result could not run.

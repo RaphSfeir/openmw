@@ -61,6 +61,8 @@ namespace MPServer
                     out.mTickHz = static_cast<unsigned>(std::stoi(value));
                 else if (key == "revive")
                     out.mRevive = !(value == "false" || value == "0" || value == "no");
+                else if (key == "restSecondsPerHour")
+                    out.mRestSecondsPerHour = std::stod(value);
             }
         }
     }
@@ -81,7 +83,8 @@ namespace MPServer
             ("password", bpo::value<std::string>(), "join password")
             ("timescale", bpo::value<double>(), "game hours per real hour ratio")
             ("tick", bpo::value<int>(), "server ticks per second")
-            ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death");
+            ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death")
+            ("restSecondsPerHour", bpo::value<double>(), "real seconds per rested game hour (default 4; 120 = an hour of rest takes an in-game hour at default timescale)");
         // clang-format on
 
         bpo::variables_map vm;
@@ -131,6 +134,8 @@ namespace MPServer
             const std::string v = vm["revive"].as<std::string>();
             out.mRevive = !(v == "false" || v == "0" || v == "no");
         }
+        if (vm.count("restSecondsPerHour"))
+            out.mRestSecondsPerHour = vm["restSecondsPerHour"].as<double>();
 
         if (out.mScriptDir.empty())
         {
@@ -148,6 +153,12 @@ namespace MPServer
         if (out.mTickHz == 0 || out.mTickHz > 240)
         {
             error = "tick must be between 1 and 240";
+            return false;
+        }
+        if (!(out.mRestSecondsPerHour > 0.0))
+        {
+            // A zero would divide the rest pacing by nothing on every client.
+            error = "restSecondsPerHour must be greater than 0";
             return false;
         }
         return true;
