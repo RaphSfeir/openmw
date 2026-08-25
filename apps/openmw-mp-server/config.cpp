@@ -85,7 +85,8 @@ namespace MPServer
             ("tick", bpo::value<int>(), "server ticks per second")
             ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death")
             ("restSecondsPerHour", bpo::value<double>(), "real seconds per rested game hour (default 4; 120 = an hour of rest takes an in-game hour at default timescale)")
-            ("reset-journal", "one-shot: clear every journal stage, kill count and mwscript global from the campaign, and forget stored character positions (characters keep stats, spells and inventory); then serve as usual");
+            ("reset-journal", "one-shot: clear every journal stage, kill count and mwscript global from the campaign, and forget stored character positions (characters keep stats, spells and inventory); then serve as usual")
+            ("reset-world", "one-shot: forget every world delta (takes, doors, locks, containers, deaths) so the world returns to the content baseline; characters and story ledgers untouched; then serve as usual");
         // clang-format on
 
         bpo::variables_map vm;
@@ -139,6 +140,8 @@ namespace MPServer
             out.mRestSecondsPerHour = vm["restSecondsPerHour"].as<double>();
         if (vm.count("reset-journal"))
             out.mResetJournal = true;
+        if (vm.count("reset-world"))
+            out.mResetWorld = true;
 
         if (out.mScriptDir.empty())
         {

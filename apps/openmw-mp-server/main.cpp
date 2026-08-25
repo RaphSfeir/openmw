@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     if (start.valid())
     {
         sol::protected_function_result opened = start(config.mCampaign, config.mTimescale, config.mPassword,
-            config.mRevive, config.mRestSecondsPerHour, config.mResetJournal);
+            config.mRevive, config.mRestSecondsPerHour, config.mResetJournal, config.mResetWorld);
         if (!opened.valid())
         {
             sol::error err = opened;

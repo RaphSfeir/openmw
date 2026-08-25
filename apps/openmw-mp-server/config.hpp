@@ -45,6 +45,11 @@ namespace MPServer
         // Command-line only, NEVER a cfg key: a wipe forgotten in a config
         // file would erase the story on every launch.
         bool mResetJournal = false;
+        // Companion one-shot: forget every world delta (takes, doors, locks,
+        // containers, deaths) so the world returns to the content baseline;
+        // characters and the story ledgers are untouched. Same command-line-
+        // only rule, same reasoning.
+        bool mResetWorld = false;
 
         // Reads a key=value file, then applies command-line overrides. Returns
         // false and explains itself when the result could not run.
