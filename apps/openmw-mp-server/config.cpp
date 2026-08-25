@@ -31,9 +31,14 @@ namespace MPServer
             std::string line;
             while (std::getline(in, line))
             {
-                const auto hash = line.find('#');
-                if (hash != std::string::npos)
-                    line = line.substr(0, hash);
+                // Comments are LEADING-ONLY, matching the engine's cfg format:
+                // '#' is legal inside a value — a Total Overhaul mod ships a
+                // plugin literally named "FMI_#NotAllDunmer.esp", and stripping
+                // from any '#' quietly truncated it to "fmi_", which then
+                // refused every client over a one-entry content mismatch.
+                const auto first = line.find_first_not_of(" \t");
+                if (first == std::string::npos || line[first] == '#')
+                    continue;
                 const auto eq = line.find('=');
                 if (eq == std::string::npos)
                     continue;
