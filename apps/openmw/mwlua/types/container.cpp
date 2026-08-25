@@ -8,7 +8,11 @@
 #include <components/misc/finitevalues.hpp>
 #include <components/misc/resourcehelpers.hpp>
 #include <components/resource/resourcesystem.hpp>
+#include <components/settings/values.hpp>
 
+#include "apps/openmw/mwbase/environment.hpp"
+#include "apps/openmw/mwbase/world.hpp"
+#include "apps/openmw/mwrender/animation.hpp"
 #include "apps/openmw/mwworld/class.hpp"
 
 namespace sol
@@ -88,6 +92,37 @@ namespace MWLua
             return ptr.getClass().getCapacity(ptr);
         };
         container["capacity"] = container["getCapacity"]; // for compatibility; should be removed later
+
+        // mp: graphic herbalism, exposed for the multiplayer layer.
+        //
+        // Whether activating a plant harvests it (contents straight into the
+        // inventory, mesh switched) or opens a window is decided from a setting
+        // and a switch node in the MESH — neither visible to Lua, and a sync
+        // layer that guesses would either swallow ordinary container windows or
+        // claim plants the engine then refuses to harvest.
+        container["canBeHarvested"] = [](const Object& obj) -> bool {
+            const MWWorld::Ptr& ptr = containerPtr(obj);
+            if (!Settings::game().mGraphicHerbalism)
+                return false;
+            const MWRender::Animation* anim = MWBase::Environment::get().getWorld()->getAnimation(ptr);
+            return anim != nullptr && anim->canBeHarvested();
+        };
+        // And the other half: emptying a plant's store does not flip its mesh,
+        // because the harvested visual is only derived when the object's
+        // animation is first built. A machine told that somebody ELSE picked
+        // this plant has to ask for that re-evaluation explicitly. Returns
+        // false when the object is not rendered here — nothing to refresh, and
+        // a freshly built animation derives the state on its own.
+        container["refreshHarvested"] = [](const GObject& obj) -> bool {
+            const MWWorld::Ptr& ptr = containerPtr(obj);
+            MWRender::Animation* anim = MWBase::Environment::get().getWorld()->getAnimation(ptr);
+            if (anim == nullptr)
+                return false;
+            // Self-guarding: harvest() switches nothing while the store still
+            // holds visible items.
+            anim->harvest(ptr);
+            return true;
+        };
 
         addRecordFunctionBinding<ESM::Container>(container, context);
 
