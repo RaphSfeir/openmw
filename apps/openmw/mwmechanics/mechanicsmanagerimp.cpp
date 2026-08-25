@@ -1139,6 +1139,19 @@ namespace MWMechanics
         }
     }
 
+    // mp: an actor standing in for another player in a session. The local
+    // player's hits still land on it, but they are not a crime and must not
+    // make the body or any witness hostile. Same shape as friendlyHit's
+    // exemption for the player's own allies.
+    static bool isMpAlly(const MWWorld::Ptr& actor)
+    {
+        if (actor.isEmpty())
+            return false;
+        const MWBase::LuaManager::ActorControls* controls
+            = MWBase::Environment::get().getLuaManager()->getActorControls(actor);
+        return controls && controls->mIsAlly;
+    }
+
     bool MechanicsManager::commitCrime(const MWWorld::Ptr& player, const MWWorld::Ptr& victim, OffenseType type,
         const ESM::RefId& factionId, int arg, bool victimAware)
     {
@@ -1146,6 +1159,15 @@ namespace MWMechanics
 
         // Only player can commit crime
         if (player != getPlayer())
+            return false;
+
+        // mp: no offence against a session partner's stand-in is a crime —
+        // and without this, a non-witnessing stand-in fell into the assault
+        // else-branch below and got startCombat() against the player, which
+        // blocked rest ("enemies are nearby") for the remainder of the
+        // session. Covers assault, murder, pickpocketing and the Lua crime
+        // route alike.
+        if (isMpAlly(victim))
             return false;
 
         if (type == OT_Assault)
@@ -1524,6 +1546,16 @@ namespace MWMechanics
     {
         const MWWorld::Ptr& player = getPlayer();
         if (target == player || !attacker.getClass().isActor())
+            return false;
+
+        // mp: sparring with a session partner is not assault. This is the
+        // point every attack road funnels through — melee, projectiles, and
+        // the spell path that bypasses the Lua combat handlers entirely — and
+        // returning false here suppresses the crime, the stand-in's
+        // retaliation, and the ally cascade, exactly as friendlyHit does for
+        // the player's own companions. The damage has already been decided
+        // upstream and still lands.
+        if (attacker == player && isMpAlly(target))
             return false;
 
         if (canCommitCrimeAgainst(target, attacker))

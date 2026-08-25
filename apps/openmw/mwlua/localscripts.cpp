@@ -77,6 +77,8 @@ namespace MWLua
         selfAPI["controls"] = sol::readonly_property([](SelfObject& self) { return &self.mControls; });
         selfAPI["isActive"] = [](SelfObject& self) -> bool { return self.mIsActive; };
         selfAPI["enableAI"] = [](SelfObject& self, bool v) { self.mControls.mDisableAI = !v; };
+        // mp: mark this body as another player's stand-in (see ActorControls::mIsAlly).
+        selfAPI["markAlly"] = [](SelfObject& self, bool v) { self.mControls.mIsAlly = v; };
         selfAPI["saveState"]
             = sol::readonly_property([](const SelfObject& self) { return self.ptr().getRefData().hasChanged(); });
         selfAPI["ATTACK_TYPE"]

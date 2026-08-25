@@ -150,6 +150,12 @@ namespace MWBase
         struct ActorControls
         {
             bool mDisableAI = false;
+            // mp: this actor stands in for another PLAYER in a session. The
+            // local player's hits still land on it, but they are not a crime
+            // and must not make the body or any witness hostile. Session-
+            // scoped by design (not serialized); set from the stand-in's own
+            // local script.
+            bool mIsAlly = false;
             bool mChanged = false;
 
             bool mJump = false;
