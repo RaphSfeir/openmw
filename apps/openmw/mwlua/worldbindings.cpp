@@ -236,6 +236,28 @@ namespace MWLua
                       "SetActorPositionAction");
               };
 
+        // mp: with a big modlist, well over a thousand levelled spawn points are
+        // rolled per machine off the shared world PRNG, so two players walk into
+        // one cave and meet two different bestiaries. Handing the engine the
+        // session's campaign seed and PARTY level makes every machine roll the
+        // same creature independently: no wire traffic, no spawn-time ownership
+        // handshake, and a cell only one player has ever visited still agrees
+        // when the other arrives. Called with nil when the session ends, which
+        // puts the vanilla dice back.
+        api["setLevelledSpawnRule"] = [](sol::optional<sol::table> rule) {
+            MWBase::World* world = MWBase::Environment::get().getWorld();
+            if (!rule)
+            {
+                world->setLevelledSpawnRule(std::nullopt);
+                return;
+            }
+            MWBase::World::LevelledSpawnRule r;
+            r.mSeed = static_cast<uint32_t>(rule->get_or("seed", 0));
+            r.mLevel = rule->get_or("level", 0);
+            r.mEpoch = static_cast<uint32_t>(rule->get_or("epoch", 0));
+            world->setLevelledSpawnRule(r);
+        };
+
         // Creates a new record in the world database.
         api["createRecord"] = sol::overload(
             [lua = context.mLua](const ESM::Activator& activator) -> const ESM::Activator* {

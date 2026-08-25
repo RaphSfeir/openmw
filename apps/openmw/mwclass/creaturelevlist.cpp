@@ -1,5 +1,8 @@
 #include "creaturelevlist.hpp"
 
+#include <cstdint>
+#include <optional>
+
 #include <components/esm3/actoridconverter.hpp>
 #include <components/esm3/creaturelevliststate.hpp>
 #include <components/esm3/loadlevlist.hpp>
@@ -109,9 +112,49 @@ namespace MWClass
             return;
 
         const MWWorld::ESMStore& store = *MWBase::Environment::get().getESMStore();
-        auto& prng = MWBase::Environment::get().getWorld()->getPrng();
+        MWBase::World* world = MWBase::Environment::get().getWorld();
+
+        // mp: THE levelled-spawn desync. Vanilla rolls this spawn point off the
+        // shared world PRNG, whose stream POSITION diverges between two machines
+        // within seconds of loading the same world (different cell-load order,
+        // different AI ticks, different combat), so the same spawner materialises
+        // a rat here and a bonelord there. With a big list that is hundreds of
+        // spawn points and two players who simply do not see the same world.
+        // A session hands us a campaign seed instead, and we roll from a stream
+        // keyed to THIS spawn point's content RefNum - a pure function of the
+        // plugin bytes and the content= order, and therefore identical on every
+        // machine the campaign will admit.
+        // mIndex and mContentFile are mixed SEPARATELY, never through
+        // RefNum::toUint32(): that throws once mContentFile > 0xFE, and a big
+        // modlist is well past 255 plugins, so it would raise here on the
+        // RENDER path for every ref past the 255th.
+        // A runtime-placed list has no content RefNum (its number is a
+        // machine-local counter), so it stays on the vanilla path and on the
+        // Lua-side arbitration that still backs all of this up.
+        std::optional<uint64_t> spawnSeed;
+        std::optional<int> spawnLevel;
+        const ESM::RefNum refNum = ptr.getCellRef().getRefNum();
+        if (const auto& rule = world->getLevelledSpawnRule(); rule && rule->mLevel > 0 && refNum.hasContentFile())
+        {
+            uint64_t s = MWMechanics::mixSeed(rule->mSeed);
+            s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(static_cast<uint32_t>(refNum.mContentFile)));
+            s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(refNum.mIndex));
+            // The respawn generation, so a cleared cave does not repopulate with
+            // the identical lineup forever. It comes off the session's shared
+            // calendar; local game time and mLastRespawn are per-client and
+            // would put the divergence straight back.
+            s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(rule->mEpoch));
+            spawnSeed = s;
+            // The PARTY level, not this machine's. getLevelledItem filters the
+            // CANDIDATE SET by player level, so two players at different levels
+            // pick different creatures from an identical seed - seeding alone
+            // looks correct in a test where both characters are level 1 and
+            // fails the moment they diverge.
+            spawnLevel = rule->mLevel;
+        }
+        auto& prng = world->getPrng();
         const ESM::RefId& id = MWMechanics::getLevelledItem(
-            store.get<ESM::CreatureLevList>().find(ptr.getCellRef().getRefId()), true, prng);
+            store.get<ESM::CreatureLevList>().find(ptr.getCellRef().getRefId()), true, prng, spawnLevel, spawnSeed);
 
         if (!id.empty())
         {

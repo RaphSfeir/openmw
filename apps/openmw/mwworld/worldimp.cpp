@@ -507,6 +507,16 @@ namespace MWWorld
         mRandomSeed = seed;
     }
 
+    void World::setLevelledSpawnRule(std::optional<MWBase::World::LevelledSpawnRule> rule)
+    {
+        mLevelledSpawnRule = rule;
+    }
+
+    const std::optional<MWBase::World::LevelledSpawnRule>& World::getLevelledSpawnRule() const
+    {
+        return mLevelledSpawnRule;
+    }
+
     void World::useDeathCamera()
     {
         mRendering->getCamera()->setMode(MWRender::Camera::Mode::ThirdPerson);

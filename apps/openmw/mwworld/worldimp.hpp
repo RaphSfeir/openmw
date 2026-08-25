@@ -136,6 +136,7 @@ namespace MWWorld
         ///< only holds doors that are currently moving. 1 = opening, 2 = closing
 
         uint32_t mRandomSeed{};
+        std::optional<LevelledSpawnRule> mLevelledSpawnRule; // mp: nullopt = vanilla rolls
         bool mIdsRebuilt{};
 
         // not implemented
@@ -207,6 +208,13 @@ namespace MWWorld
         virtual ~World();
 
         void setRandomSeed(uint32_t seed) override;
+
+        // mp: nullopt = vanilla dice. Deliberately NOT serialised into the
+        // savegame (unlike REC_RAND): the rule is re-pushed on every join, and
+        // a saved one would silently make a single-player load behave like a
+        // session.
+        void setLevelledSpawnRule(std::optional<LevelledSpawnRule> rule) override;
+        const std::optional<LevelledSpawnRule>& getLevelledSpawnRule() const override;
 
         void startNewGame(bool bypass) override;
         ///< \param bypass Bypass regular game start.

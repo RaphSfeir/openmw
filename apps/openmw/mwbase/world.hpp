@@ -3,7 +3,9 @@
 
 #include "rotationflags.hpp"
 
+#include <cstdint>
 #include <deque>
+#include <optional>
 #include <set>
 #include <span>
 #include <string_view>
@@ -125,6 +127,20 @@ namespace MWBase
 
         virtual void setRandomSeed(uint32_t seed) = 0;
         ///< \param seed The seed used when starting a new game.
+
+        // mp: what a multiplayer session needs so that every machine rolls the
+        // SAME creature out of the same levelled spawn point. Absent (nullopt)
+        // in single-player and until a session's rule message lands, and the
+        // engine then behaves exactly as upstream.
+        // See MWClass::CreatureLevList::insertObjectRendering.
+        struct LevelledSpawnRule
+        {
+            uint32_t mSeed = 0; // the campaign's, minted once and pushed to every client
+            int mLevel = 0; // the PARTY level; this machine's own level desyncs the roll
+            uint32_t mEpoch = 0; // respawn generation, off the session's shared calendar
+        };
+        virtual void setLevelledSpawnRule(std::optional<LevelledSpawnRule> rule) = 0;
+        virtual const std::optional<LevelledSpawnRule>& getLevelledSpawnRule() const = 0;
 
         virtual void startNewGame(bool bypass) = 0;
         ///< \param bypass Bypass regular game start.
