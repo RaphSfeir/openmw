@@ -50,6 +50,13 @@ namespace MPServer
         // characters and the story ledgers are untouched. Same command-line-
         // only rule, same reasoning.
         bool mResetWorld = false;
+        // One-shot stat surgery for every stored character (flat 100 sheet,
+        // bridged mod state dropped). Command-line only, same reasoning.
+        bool mRepairStats = false;
+        // Operator override: the content list changed on purpose — re-stamp
+        // the campaign's hash instead of refusing to resume. Command-line
+        // only: left in a cfg it would silently bless EVERY future mismatch.
+        bool mAcceptContent = false;
 
         // Reads a key=value file, then applies command-line overrides. Returns
         // false and explains itself when the result could not run.

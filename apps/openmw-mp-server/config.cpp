@@ -91,7 +91,9 @@ namespace MPServer
             ("revive", bpo::value<std::string>(), "death rule: true = downed+revive (default), false = classic temple death")
             ("restSecondsPerHour", bpo::value<double>(), "real seconds per rested game hour (default 4; 120 = an hour of rest takes an in-game hour at default timescale)")
             ("reset-journal", "one-shot: clear every journal stage, kill count and mwscript global from the campaign, and forget stored character positions (characters keep stats, spells and inventory); then serve as usual")
-            ("reset-world", "one-shot: forget every world delta (takes, doors, locks, containers, deaths) so the world returns to the content baseline; characters and story ledgers untouched; then serve as usual");
+            ("reset-world", "one-shot: forget every world delta (takes, doors, locks, containers, deaths) so the world returns to the content baseline; characters and story ledgers untouched; then serve as usual")
+            ("repair-stats", "one-shot: set every stored character's attributes and skills to a flat 100 (damage cleared), re-derive health/magicka/fatigue, and drop bridged mod state; then serve as usual")
+            ("accept-content", "operator override: the content list changed ON PURPOSE (a mod added or removed) — re-stamp the campaign's content hash instead of refusing to resume");
         // clang-format on
 
         bpo::variables_map vm;
@@ -147,6 +149,10 @@ namespace MPServer
             out.mResetJournal = true;
         if (vm.count("reset-world"))
             out.mResetWorld = true;
+        if (vm.count("repair-stats"))
+            out.mRepairStats = true;
+        if (vm.count("accept-content"))
+            out.mAcceptContent = true;
 
         if (out.mScriptDir.empty())
         {
