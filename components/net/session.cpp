@@ -19,6 +19,13 @@ namespace Net
         constexpr std::size_t sNumChannels = 2;
         constexpr int sMaxEventsPerPump = 256;
         constexpr std::chrono::seconds sConnectTimeout(8);
+        // How long a live peer may go silent before the link is abandoned. See the
+        // note at the ENET_EVENT_TYPE_CONNECT case: ENet's own default works out to a
+        // flat five seconds on any realistic link, which a loading game client
+        // exceeds routinely and innocently.
+        constexpr std::uint32_t sTimeoutLimit = 32;
+        constexpr std::uint32_t sTimeoutMinimumMs = 20000;
+        constexpr std::uint32_t sTimeoutMaximumMs = 40000;
         // Outgoing::mTo value that requests a broadcast to all peers (host only).
         constexpr std::uint32_t sBroadcastMarker = 0xFFFFFFFFu;
 
@@ -244,6 +251,23 @@ namespace Net
                 {
                     case ENET_EVENT_TYPE_CONNECT:
                     {
+                        // Give a peer room to stall before we give up on it.
+                        //
+                        // ENet's default is roundTripTime * ENET_PEER_TIMEOUT_LIMIT,
+                        // clamped to a 5 second MINIMUM. Round trip time is ~0 on a
+                        // local link and ~30ms over the internet, so that product is
+                        // always far below the floor and every connection in practice
+                        // gets exactly five seconds. Five seconds is nothing to a
+                        // Morrowind client: loading a city interior in a heavy modlist
+                        // blocks the main loop — and therefore the ENet pump — for
+                        // longer than that routinely. The peer was then dropped for
+                        // being busy, mid-session, having done nothing wrong.
+                        //
+                        // A game is not a chat protocol. Being slow is normal here and
+                        // being gone is not, so wait properly before concluding the
+                        // second: 20 seconds of complete silence before a healthy link
+                        // is abandoned, 40 at the outside.
+                        enet_peer_timeout(event.peer, sTimeoutLimit, sTimeoutMinimumMs, sTimeoutMaximumMs);
                         std::uint32_t id = sServerPeerId;
                         if (mLiveRole == Role::Host)
                         {
