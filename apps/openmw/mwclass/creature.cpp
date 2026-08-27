@@ -31,6 +31,8 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwmechanics/levelledlist.hpp"
+
 #include "../mwlua/localscripts.hpp"
 
 #include "../mwworld/actionopen.hpp"
@@ -167,8 +169,31 @@ namespace MWClass
 
             resetter.mPtr = {};
 
-            auto& prng = MWBase::Environment::get().getWorld()->getPrng();
-            getContainerStore(ptr).fill(ref->mBase->mInventory, ptr.getCellRef().getRefId(), prng);
+            // mp: an actor's levelled gear must be the same on every machine.
+            //
+            // The levelled-CREATURE roll was made deterministic earlier, so both
+            // clients agree a skeleton stands here - and then each rolled its
+            // WEAPON from its own RNG, so one saw an axe and the other a spear.
+            // Same actor, same position, same health, different equipment.
+            //
+            // Only for an actor with a content RefNum: a runtime-spawned one is
+            // numbered by a machine-local counter, so its RefNum means nothing
+            // to anybody else and there is no shared seed to derive. Those keep
+            // the vanilla path (see the note in the commit).
+            const ESM::RefNum refNum = ptr.getCellRef().getRefNum();
+            const auto& rule = MWBase::Environment::get().getWorld()->getLevelledSpawnRule();
+            if (rule && refNum.hasContentFile())
+            {
+                getContainerStore(ptr).fillDeterministic(ref->mBase->mInventory,
+                    ptr.getCellRef().getRefId(),
+                    MWMechanics::actorInventorySeed(
+                        rule->mSeed, refNum.mContentFile, refNum.mIndex, rule->mEpoch));
+            }
+            else
+            {
+                auto& prng = MWBase::Environment::get().getWorld()->getPrng();
+                getContainerStore(ptr).fill(ref->mBase->mInventory, ptr.getCellRef().getRefId(), prng);
+            }
 
             if (hasInventory)
                 getInventoryStore(ptr).autoEquip();

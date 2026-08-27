@@ -28,6 +28,29 @@ namespace MWMechanics
         return z ^ (z >> 31);
     }
 
+    // mp: the per-actor seed for resolving that actor's levelled INVENTORY.
+    //
+    // Derived exactly like the levelled-CREATURE seed in creaturelevlist.cpp -
+    // campaign seed, the RefNum's two halves mixed separately, then the respawn
+    // epoch - because it answers the same question: what would every machine in
+    // this session agree on for this particular object?
+    //
+    // The domain separator is not decoration. Without it an actor's inventory
+    // draw would begin from the identical value its own creature draw used, so
+    // the two would correlate - the same list positions coming up together
+    // across the whole world, which reads as a pattern rather than a roll.
+    constexpr uint64_t sDomainInventory = 0x9E3779B97F4A7C15ULL;
+
+    constexpr uint64_t actorInventorySeed(
+        uint64_t campaignSeed, int contentFile, uint32_t index, uint32_t epoch)
+    {
+        uint64_t s = mixSeed(campaignSeed ^ sDomainInventory);
+        s = mixSeed(s ^ static_cast<uint64_t>(static_cast<uint32_t>(contentFile)));
+        s = mixSeed(s ^ static_cast<uint64_t>(index));
+        s = mixSeed(s ^ static_cast<uint64_t>(epoch));
+        return s;
+    }
+
     /// @return ID of resulting item, or empty if none
     // mp: `seed`, when set, replaces `prng` with a deterministic draw stream so
     // that two machines resolve the same list to the same record. It is nullopt
