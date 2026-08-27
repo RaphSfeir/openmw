@@ -1,8 +1,6 @@
 #ifndef GAME_MWWORLD_CONTAINERSTORE_H
 #define GAME_MWWORLD_CONTAINERSTORE_H
 
-#include <cstdint>
-#include <optional>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -283,14 +281,6 @@ namespace MWWorld
 
         mutable float mCachedWeight = 0;
         unsigned int mSeed = 0;
-        // mp: when set, levelled entries in this store resolve from a shared
-        // deterministic stream instead of this machine's RNG, so every client
-        // gives the same NPC the same sword. Counter advances per levelled draw
-        // so several levelled entries in one inventory do not all resolve
-        // identically; the inventory list order is fixed by the content file, so
-        // the counter means the same thing everywhere.
-        std::optional<uint64_t> mLevelledSeed;
-        unsigned int mLevelledDraw = 0;
         MWWorld::SafePtr mPtr; // Container or actor that holds this store.
         std::weak_ptr<ResolutionListener> mResolutionListener;
 
@@ -432,9 +422,6 @@ namespace MWWorld
         ///< Insert items into *this.
 
         void fillNonRandom(const ESM::InventoryList& items, const ESM::RefId& owner, unsigned int seed);
-
-        /// mp: as fill(), but levelled lists resolve deterministically from `seed`.
-        void fillDeterministic(const ESM::InventoryList& items, const ESM::RefId& owner, uint64_t seed);
         ///< Insert items into *this, excluding leveled items
 
         virtual void clear();

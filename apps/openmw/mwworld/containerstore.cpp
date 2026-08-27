@@ -729,33 +729,6 @@ void MWWorld::ContainerStore::fillNonRandom(const ESM::InventoryList& items, con
     mResolved = false;
 }
 
-// mp: fill(), but levelled entries resolve from a shared deterministic stream.
-//
-// Not fillNonRandom(). That one looks like the obvious candidate and is a trap:
-// its null-prng path RETURNS on any levelled list rather than resolving it,
-// deferring the whole question until a container is opened. Correct for a
-// chest; ruinous for an actor, whose autoEquip() runs immediately afterwards
-// and would find nothing to wear.
-//
-// So the fill is entirely normal and only the DRAW changes: getLevelledItem's
-// seeded path replaces this machine's RNG, which matters because the unseeded
-// one goes through std::uniform_int_distribution - implementation-defined, and
-// therefore different between MSVC and libstdc++ even from an identical seed.
-// Seeding the generator alone would have looked right on two Windows machines
-// and diverged the moment somebody joined from Linux.
-void MWWorld::ContainerStore::fillDeterministic(
-    const ESM::InventoryList& items, const ESM::RefId& owner, uint64_t seed)
-{
-    mLevelledSeed = seed;
-    mLevelledDraw = 0;
-    auto& prng = MWBase::Environment::get().getWorld()->getPrng();
-    for (const ESM::ContItem& iter : items.mList)
-        addInitialItem(iter.mItem, owner, iter.mCount, &prng);
-
-    flagAsModified();
-    mResolved = true;
-}
-
 void MWWorld::ContainerStore::addInitialItem(
     const ESM::RefId& id, const ESM::RefId& owner, int count, Misc::Rng::Generator* prng, bool topLevel)
 {
@@ -798,15 +771,7 @@ void MWWorld::ContainerStore::addInitialItemImp(
         }
         else
         {
-            // mp: the shared draw, when this store was filled deterministically.
-            // The counter advances per levelled entry so two levelled slots in
-            // one inventory do not resolve to the same record; the list order
-            // comes from the content file, so it counts identically everywhere.
-            std::optional<uint64_t> drawSeed;
-            if (mLevelledSeed)
-                drawSeed = MWMechanics::mixSeed(*mLevelledSeed ^ static_cast<uint64_t>(mLevelledDraw++));
-            const auto& itemId
-                = MWMechanics::getLevelledItem(ptr.get<ESM::ItemLevList>()->mBase, false, *prng, {}, drawSeed);
+            const auto& itemId = MWMechanics::getLevelledItem(ptr.get<ESM::ItemLevList>()->mBase, false, *prng);
             if (itemId.empty())
                 return;
             addInitialItem(itemId, owner, count, prng, false);

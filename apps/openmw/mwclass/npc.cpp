@@ -30,8 +30,6 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwmechanics/levelledlist.hpp"
-
 #include "../mwlua/localscripts.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
@@ -404,24 +402,10 @@ namespace MWClass
 
             // inventory
             // setting ownership is used to make the NPC auto-equip his initial equipment only, and not bartered items
-            // mp: see the note in creature.cpp - an NPC's levelled gear has to
-            // be the same on every machine, or a guard wears different armour
-            // for each player looking at him.
+            auto& prng = MWBase::Environment::get().getWorld()->getPrng();
             MWWorld::InventoryStore& inventory = getInventoryStore(ptr);
             inventory.setPtr(ptr);
-            const ESM::RefNum refNum = ptr.getCellRef().getRefNum();
-            const auto& rule = MWBase::Environment::get().getWorld()->getLevelledSpawnRule();
-            if (rule && refNum.hasContentFile())
-            {
-                inventory.fillDeterministic(ref->mBase->mInventory, ptr.getCellRef().getRefId(),
-                    MWMechanics::actorInventorySeed(
-                        rule->mSeed, refNum.mContentFile, refNum.mIndex, rule->mEpoch));
-            }
-            else
-            {
-                auto& prng = MWBase::Environment::get().getWorld()->getPrng();
-                inventory.fill(ref->mBase->mInventory, ptr.getCellRef().getRefId(), prng);
-            }
+            inventory.fill(ref->mBase->mInventory, ptr.getCellRef().getRefId(), prng);
             inventory.autoEquip();
         }
     }
