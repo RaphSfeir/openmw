@@ -1,7 +1,9 @@
 #include "types.hpp"
 
 #include <components/esm3/loadbsgn.hpp>
+#include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadfact.hpp>
+#include <components/esm3/loadnpc.hpp>
 #include <components/lua/util.hpp>
 
 #include "../birthsignbindings.hpp"
@@ -416,6 +418,50 @@ namespace MWLua
                     MWBase::Environment::get().getMechanicsManager()->setPlayerName(newName);
                 },
                 "setNameAction");
+        };
+        // mp addition: set the character's CLASS. Restoring a character from a
+        // campaign puts back its skills, but a class is not a stat — it is a
+        // record the NPC points at, and it decides which skills level fastest
+        // and what the character sheet says. Without this a restored character
+        // keeps whatever class the machine's own chargen happened to leave.
+        //
+        // Only an existing class record can be named. A TES3MP custom class
+        // arrives as a display name with no record behind it and is simply
+        // refused here; carrying those across would mean inserting the class
+        // record too, which is a separate job.
+        //
+        // Deliberately NOT MechanicsManager::setPlayerClass: that one ends in
+        // buildPlayer(), which re-rolls the character from race + class +
+        // birthsign — level back to 1, attributes and skills back to starting
+        // values. That is right for chargen, where there is nothing to lose,
+        // and exactly wrong here, where the whole point is a character that
+        // already has eight levels of history. The record swap below is what
+        // setPlayerName does, and it is all a class change actually needs: the
+        // NPC points at a different class, so the sheet reads it and skill
+        // progression uses it, and nothing else moves.
+        //
+        // mUpdatePlayer is not set for the same reason — all it drives is
+        // re-registering the actor so a NEW ANIMATION is picked up (see
+        // MechanicsManager::update). A class has no model; a race or a name
+        // change does.
+        //
+        // Queued like every other Lua mutation, and the same caller rule as
+        // setName above.
+        player["setClass"] = [context](const Object& object, std::string_view classId) {
+            verifyPlayer(object);
+            if (object.isLObject() && !object.isSelfObject())
+                throw std::runtime_error("Only player and global scripts can set the player's class.");
+            ESM::RefId id = ESM::RefId::deserializeText(classId);
+            if (MWBase::Environment::get().getESMStore()->get<ESM::Class>().search(id) == nullptr)
+                throw std::runtime_error("No such class: " + std::string(classId));
+            context.mLuaManager->addAction(
+                [id] {
+                    MWBase::World* world = MWBase::Environment::get().getWorld();
+                    ESM::NPC record = *world->getPlayerPtr().get<ESM::NPC>()->mBase;
+                    record.mClass = id;
+                    world->getStore().insert(record);
+                },
+                "setClassAction");
         };
         player["addTopic"] = [](const Object& object, std::string_view topicId) {
             verifyPlayer(object);
