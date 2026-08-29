@@ -1,9 +1,11 @@
 #include "types.hpp"
 
+#include <components/esm3/loadbody.hpp>
 #include <components/esm3/loadbsgn.hpp>
 #include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadfact.hpp>
 #include <components/esm3/loadnpc.hpp>
+#include <components/esm3/loadrace.hpp>
 #include <components/lua/util.hpp>
 
 #include "../birthsignbindings.hpp"
@@ -462,6 +464,63 @@ namespace MWLua
                     world->getStore().insert(record);
                 },
                 "setClassAction");
+        };
+        // mp addition: set the character's RACE and face. Same story as setClass
+        // above — a campaign stores what the character looks like, and without
+        // this a restored character wore whatever body this machine's chargen
+        // happened to leave, so an imported High Elf came back a Dunmer.
+        //
+        // Again NOT MechanicsManager::setPlayerRace, and again because it ends
+        // in buildPlayer() and would re-roll eight levels of history. What is
+        // borrowed from it is the half that matters: the record swap and the
+        // renderPlayer() call. A race change DOES need that second one — unlike
+        // a class, a race has a body — and renderPlayer is public on
+        // MWBase::World, so it costs nothing to reach.
+        //
+        // head and hair are optional but effectively required together with a
+        // race change: leaving a Dunmer head on a High Elf body is worse than
+        // not changing the race at all. All three are checked BEFORE anything
+        // is written, so a face this modlist does not have leaves the character
+        // exactly as it was rather than half-converted.
+        player["setRace"] = [context](const Object& object, std::string_view raceId, sol::optional<bool> isMale,
+                                sol::optional<std::string_view> headId, sol::optional<std::string_view> hairId) {
+            verifyPlayer(object);
+            if (object.isLObject() && !object.isSelfObject())
+                throw std::runtime_error("Only player and global scripts can set the player's race.");
+            const MWWorld::ESMStore* store = MWBase::Environment::get().getESMStore();
+            ESM::RefId race = ESM::RefId::deserializeText(raceId);
+            if (store->get<ESM::Race>().search(race) == nullptr)
+                throw std::runtime_error("No such race: " + std::string(raceId));
+            std::optional<ESM::RefId> head, hair;
+            if (headId)
+            {
+                head = ESM::RefId::deserializeText(*headId);
+                if (store->get<ESM::BodyPart>().search(*head) == nullptr)
+                    throw std::runtime_error("No such head: " + std::string(*headId));
+            }
+            if (hairId)
+            {
+                hair = ESM::RefId::deserializeText(*hairId);
+                if (store->get<ESM::BodyPart>().search(*hair) == nullptr)
+                    throw std::runtime_error("No such hair: " + std::string(*hairId));
+            }
+            context.mLuaManager->addAction(
+                [race, isMale, head, hair] {
+                    MWBase::World* world = MWBase::Environment::get().getWorld();
+                    ESM::NPC record = *world->getPlayerPtr().get<ESM::NPC>()->mBase;
+                    record.mRace = race;
+                    if (isMale)
+                        record.setIsMale(*isMale);
+                    if (head)
+                        record.mHead = *head;
+                    if (hair)
+                        record.mHair = *hair;
+                    world->getStore().insert(record);
+                    // The body actually changed, so the Animation object has to
+                    // be rebuilt. This is the call chargen's race dialog makes.
+                    world->renderPlayer();
+                },
+                "setRaceAction");
         };
         player["addTopic"] = [](const Object& object, std::string_view topicId) {
             verifyPlayer(object);
