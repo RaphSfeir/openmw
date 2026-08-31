@@ -292,6 +292,12 @@ namespace MWMechanics
             mDynamic[0].setCurrent(mDynamic[0].getBase());
             mDead = false;
             mDeathAnimationFinished = false;
+            // The old death's animation index must not outlive the death, or an
+            // actor raised and killed again silently repeats its first death
+            // instead of rolling a new one. Harmless while nothing read the index
+            // on a live death; playRandomDeath does now.
+            mDeathAnimation = -1;
+            mInstantDeath = false;
         }
     }
 
@@ -668,6 +674,16 @@ namespace MWMechanics
     void CreatureStats::setDeathAnimation(signed char index)
     {
         mDeathAnimation = index;
+    }
+
+    bool CreatureStats::isInstantDeath() const
+    {
+        return mInstantDeath;
+    }
+
+    void CreatureStats::setInstantDeath(bool instant)
+    {
+        mInstantDeath = instant;
     }
 
     MWWorld::TimeStamp CreatureStats::getTimeOfDeath() const

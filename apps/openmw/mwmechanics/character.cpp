@@ -881,17 +881,48 @@ namespace MWMechanics
             MWBase::Environment::get().getWorld()->useDeathCamera();
         }
 
-        mDeathState = hitStateToDeathState(mHitState);
-        if (mDeathState == CharState_None && MWBase::Environment::get().getWorld()->isSwimming(mPtr))
-            mDeathState = CharState_SwimDeath;
+        MWMechanics::CreatureStats& deathStats = mPtr.getClass().getCreatureStats(mPtr);
 
-        if (mDeathState == CharState_None
-            || (mAnimation && !mAnimation->hasAnimation(deathStateToAnimGroup(mDeathState))))
-            mDeathState = chooseRandomDeathState();
+        // A death animation chosen for us, rather than rolled here. The index is
+        // already part of CreatureStats -- the engine records which death was played
+        // so a saved corpse can be rebuilt in the same pose -- and it is -1 until
+        // something decides. Honouring it when it is set lets one machine's roll be
+        // reproduced on another, which is what multiplayer needs: the animations
+        // carry root motion, so two machines rolling differently end with the body
+        // in two different places.
+        const signed char chosenDeath = deathStats.getDeathAnimation();
+        const bool chosenIsUsable = chosenDeath >= 0
+            && chosenDeath <= static_cast<signed char>(CharState_DeathKnockOut - CharState_Death1)
+            && (!mAnimation
+                || mAnimation->hasAnimation(
+                    deathStateToAnimGroup(static_cast<CharacterState>(CharState_Death1 + chosenDeath))));
+        if (chosenIsUsable)
+            mDeathState = static_cast<CharacterState>(CharState_Death1 + chosenDeath);
+        else
+        {
+            mDeathState = hitStateToDeathState(mHitState);
+            if (mDeathState == CharState_None && MWBase::Environment::get().getWorld()->isSwimming(mPtr))
+                mDeathState = CharState_SwimDeath;
+
+            if (mDeathState == CharState_None
+                || (mAnimation && !mAnimation->hasAnimation(deathStateToAnimGroup(mDeathState))))
+                mDeathState = chooseRandomDeathState();
+        }
 
         // Do not interrupt scripted animation by death
         if (!mAnimation || isScriptedAnimPlaying())
             return;
+
+        // Already-dead deaths start at the animation's END: the actor becomes a
+        // settled corpse this frame instead of collapsing over the next second, and
+        // no root motion is applied because nothing is playing. Everything else about
+        // the death is untouched -- kill() still walks its normal states, so the
+        // died notification, spell purge and collision drop all happen as usual.
+        if (deathStats.isInstantDeath())
+        {
+            startpoint = 1.f;
+            deathStats.setInstantDeath(false);
+        }
 
         playDeath(startpoint, mDeathState);
     }

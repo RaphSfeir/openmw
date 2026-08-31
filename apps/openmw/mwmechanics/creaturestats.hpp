@@ -96,6 +96,24 @@ namespace MWMechanics
         // The index of the death animation that was played, or -1 if none played
         signed char mDeathAnimation = -1;
 
+        // Start the death animation at its END, so the actor is a settled corpse on
+        // the frame it dies instead of collapsing over the next second.
+        //
+        // Multiplayer needs this: a client joining a cleared dungeon rebuilds each
+        // body and kills it, and without this every corpse in the room stands up and
+        // falls over again on arrival -- and lands somewhere slightly different,
+        // because death animations carry root motion and each machine rolls its own.
+        // The engine already reproduces settled corpses this way when it loads a save
+        // (see CharacterController's constructor); this is the same capability for a
+        // death that happens during play.
+        //
+        // Deliberately NOT mDeathAnimationFinished, which looks like it would do:
+        // CharacterController::kill() reads that flag to decide whether the death has
+        // just finished, so pre-setting it skips notifyDied(), the actorDied Lua
+        // event, spell purging and the collision drop. Consumed once, by
+        // playRandomDeath. Transient: never saved, never sent.
+        bool mInstantDeath = false;
+
         bool mTeleported = false;
 
     public:
@@ -274,6 +292,9 @@ namespace MWMechanics
 
         signed char getDeathAnimation() const; // -1 means not decided
         void setDeathAnimation(signed char index);
+
+        bool isInstantDeath() const;
+        void setInstantDeath(bool instant);
 
         MWWorld::TimeStamp getTimeOfDeath() const;
 

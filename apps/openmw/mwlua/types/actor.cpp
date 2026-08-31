@@ -529,6 +529,57 @@ namespace MWLua
                 "ResurrectAction");
         };
 
+        // WHICH death animation an actor will play, and whether it plays at all.
+        //
+        // Morrowind rolls one of several death animations at random, and they are not
+        // played in place: each carries root motion that drags the body as it falls.
+        // Two machines therefore end the same death with the body in two different
+        // spots, which multiplayer has no way to reconcile after the fact -- the roll
+        // happens inside the engine, after the point any script can reach.
+        //
+        // The engine already stores the chosen index (that is how a saved corpse is
+        // rebuilt in its old pose); these expose it. Set the index to reproduce
+        // another machine's roll, and setInstantDeath to skip the collapse entirely so
+        // the actor is a settled corpse on the frame it dies -- the state a body is in
+        // when you load a save or walk into a cell where something already died.
+        //
+        // Both are consumed by the death itself and are only meaningful while the
+        // actor is still alive; resurrecting clears them.
+        actor["setDeathAnimation"] = [context](const Object& object, int index) {
+            if (!object.isGObject() && !object.isSelfObject())
+                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
+            // -1 is the engine's "not decided"; 0..9 are Death1..DeathKnockOut. An
+            // out-of-range index would land outside the death states entirely.
+            if (index < -1 || index > 9)
+                throw std::runtime_error("Death animation index must be -1 (undecided) or 0..9");
+            context.mLuaManager->addAction(
+                [obj = Object(object), index] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (!ptr.getClass().isActor())
+                        throw std::runtime_error("Actor expected");
+                    ptr.getClass().getCreatureStats(ptr).setDeathAnimation(static_cast<signed char>(index));
+                },
+                "SetDeathAnimationAction");
+        };
+
+        actor["setInstantDeath"] = [context](const Object& object, bool instant) {
+            if (!object.isGObject() && !object.isSelfObject())
+                throw std::runtime_error("Can only be used in global scripts or in local scripts on self.");
+            context.mLuaManager->addAction(
+                [obj = Object(object), instant] {
+                    const MWWorld::Ptr ptr = obj.ptr();
+                    if (!ptr.getClass().isActor())
+                        throw std::runtime_error("Actor expected");
+                    ptr.getClass().getCreatureStats(ptr).setInstantDeath(instant);
+                },
+                "SetInstantDeathAction");
+        };
+
+        actor["getDeathAnimation"] = [](const Object& o) {
+            const auto& target = o.ptr();
+            return static_cast<int>(target.getClass().getCreatureStats(target).getDeathAnimation());
+        };
+
         // Death counts drive quest conditions ("Dead", GetDeadCount) but only increment
         // on a client that actually simulated the death, so they need to be readable
         // and writable to stay identical between multiplayer clients.
