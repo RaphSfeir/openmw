@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 
+#include <components/lua/jsonmirror.hpp>
 #include <components/lua/serialization.hpp>
 #include <components/net/session.hpp>
 
@@ -169,6 +170,59 @@ namespace MPServer
                     throw std::runtime_error("campaign.read: cannot open " + file.string());
                 const std::string binary{ std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
                 return LuaUtil::deserialize(view, binary, nullptr);
+            };
+            // The readable mirror. The dedicated server is the machine that
+            // HOLDS the campaign, so this is the copy that matters -- the
+            // client's binding in mwlua has the same pair, and the first version
+            // of this shipped to only that one, which is why the server answered
+            // "this build has no campaign.writeJson binding".
+            auto jsonFileFor = [dir](std::string_view name) {
+                for (const char c : name)
+                {
+                    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                        || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '@';
+                    if (!ok)
+                        throw std::runtime_error("campaign: invalid name (a-z, A-Z, 0-9, '-', '_', '@' only)");
+                }
+                return dir / (std::string(name) + ".json");
+            };
+            api["writeJson"] = [jsonFileFor](std::string_view name, const sol::object& data) {
+                const std::filesystem::path file = jsonFileFor(name);
+                std::filesystem::path tmp = file;
+                tmp += ".tmp";
+                std::filesystem::create_directories(file.parent_path());
+                YAML::Emitter emitter;
+                emitter << YAML::DoubleQuoted << YAML::Flow;
+                LuaUtil::JsonMirror::write(data, emitter);
+                if (!emitter.good())
+                    throw std::runtime_error("campaign.writeJson: " + emitter.GetLastError());
+                {
+                    std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+                    if (!out)
+                        throw std::runtime_error("campaign.writeJson: cannot open " + tmp.string());
+                    out << emitter.c_str() << std::endl;
+                    out.flush();
+                    if (!out)
+                        throw std::runtime_error("campaign.writeJson: failed writing " + tmp.string());
+                }
+                std::filesystem::rename(tmp, file);
+            };
+            api["readJson"] = [jsonFileFor](std::string_view name, sol::this_state s) -> sol::object {
+                sol::state_view view(s);
+                const std::filesystem::path file = jsonFileFor(name);
+                if (!std::filesystem::exists(file))
+                    return sol::nil;
+                try
+                {
+                    const YAML::Node root = YAML::LoadFile(file.string());
+                    return LuaUtil::JsonMirror::read(root, view);
+                }
+                catch (const YAML::Exception& e)
+                {
+                    // Named and rethrown: an import that silently half-applies a
+                    // broken file is worse than one that refuses.
+                    throw std::runtime_error("campaign.readJson: " + file.string() + ": " + e.what());
+                }
             };
             api["list"] = [dir](sol::this_state s) {
                 sol::state_view view(s);

@@ -1,5 +1,7 @@
 #include "campaignbindings.hpp"
 
+#include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -7,8 +9,10 @@
 #include <string>
 
 #include <sol/sol.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include <components/lua/luastate.hpp>
+#include <components/lua/jsonmirror.hpp>
 #include <components/lua/serialization.hpp>
 
 #include "context.hpp"
@@ -45,6 +49,14 @@ namespace MWLua
                 throw std::runtime_error("campaign: invalid name (a-z, A-Z, 0-9, '-', '_', '@' only)");
             return campaignDir(context) / (std::string(name) + ".bin");
         }
+
+        std::filesystem::path jsonFileFor(const Context& context, std::string_view name)
+        {
+            if (!isValidName(name))
+                throw std::runtime_error("campaign: invalid name (a-z, A-Z, 0-9, '-', '_', '@' only)");
+            return campaignDir(context) / (std::string(name) + ".json");
+        }
+
     }
 
     sol::table initCampaignPackage(const Context& context)
@@ -83,6 +95,50 @@ namespace MWLua
                 throw std::runtime_error("campaign.read: cannot open " + file.string());
             const std::string binary{ std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
             return LuaUtil::deserialize(lua, binary, serializer);
+        };
+
+        // Same atomic write as the binary path: temp file, then rename. A dump
+        // interrupted half way must not leave a file that parses as a truncated
+        // campaign -- the whole point of the mirror is to be trustworthy when
+        // something has gone wrong.
+        api["writeJson"] = [context](std::string_view name, const sol::object& data) {
+            const std::filesystem::path file = jsonFileFor(context, name);
+            std::filesystem::path tmp = file;
+            tmp += ".tmp";
+            std::filesystem::create_directories(file.parent_path());
+            YAML::Emitter emitter;
+            emitter << YAML::DoubleQuoted << YAML::Flow;
+            LuaUtil::JsonMirror::write(data, emitter);
+            if (!emitter.good())
+                throw std::runtime_error("campaign.writeJson: " + emitter.GetLastError());
+            {
+                std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+                if (!out)
+                    throw std::runtime_error("campaign.writeJson: cannot open " + tmp.string());
+                out << emitter.c_str() << '\n';
+                out.flush();
+                if (!out)
+                    throw std::runtime_error("campaign.writeJson: failed writing " + tmp.string());
+            }
+            std::filesystem::rename(tmp, file);
+        };
+
+        api["readJson"] = [context](std::string_view name, sol::this_state s) -> sol::object {
+            sol::state_view lua(s);
+            const std::filesystem::path file = jsonFileFor(context, name);
+            if (!std::filesystem::exists(file))
+                return sol::nil;
+            try
+            {
+                const YAML::Node root = YAML::LoadFile(file.string());
+                return LuaUtil::JsonMirror::read(root, lua);
+            }
+            catch (const YAML::Exception& e)
+            {
+                // Named and rethrown: an import that silently half-applies a
+                // broken file is worse than one that refuses.
+                throw std::runtime_error("campaign.readJson: " + file.string() + ": " + e.what());
+            }
         };
 
         api["list"] = [context](sol::this_state s) {
