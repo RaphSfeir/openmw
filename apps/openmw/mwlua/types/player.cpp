@@ -640,7 +640,17 @@ namespace MWLua
             verifyPlayer(object);
             if (!object.isGObject())
                 throw std::runtime_error("Only global scripts can change birth signs");
-            MWBase::Environment::get().getWorld()->getPlayer().setBirthSign(toBirthSignId(recordOrId));
+            // THROUGH THE MECHANICS MANAGER, so the sign's POWERS are granted.
+            //
+            // Player::setBirthSign only records the id. buildPlayer() is what
+            // walks sign->mPowers and adds each spell, and setPlayerBirthsign is
+            // the only thing that calls it -- so setting a sign the direct way
+            // gave a character whose sheet named a sign it had none of the
+            // abilities of. Reported from play as a missing star-sign spell, and
+            // it is the same shape as the race bug beside it: recording an id is
+            // not the same as applying what the id means.
+            MWBase::Environment::get().getMechanicsManager()->setPlayerBirthsign(
+                toBirthSignId(recordOrId));
         };
     }
 }
