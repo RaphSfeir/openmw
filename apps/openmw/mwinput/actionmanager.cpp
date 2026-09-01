@@ -130,20 +130,34 @@ namespace MWInput
             case A_QuickLoad:
                 quickLoad();
                 break;
+            // CYCLING GEAR OBEYS THE PLAYERCONTROLS SWITCH, like resting does.
+            //
+            // These four checked only for werewolf form and the window
+            // permissions, so they fired while the player was not in control at
+            // all -- during a scripted sequence, while downed, or (the case
+            // that found it) while typing into a chat box, where the letters of
+            // a command were cycling the character's weapon. Nothing outside
+            // the engine can prevent that: Lua is NOTIFIED of an action at the
+            // top of this function and cannot veto it, and the switch these
+            // now read is the same one ActionManager::rest already respects.
             case A_CycleSpellLeft:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(MWGui::GW_Magic))
+                if (inputManager->getControlSwitch("playercontrols") && checkAllowedToUseItems()
+                    && windowManager->isAllowed(MWGui::GW_Magic))
                     MWBase::Environment::get().getWindowManager()->cycleSpell(false);
                 break;
             case A_CycleSpellRight:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(MWGui::GW_Magic))
+                if (inputManager->getControlSwitch("playercontrols") && checkAllowedToUseItems()
+                    && windowManager->isAllowed(MWGui::GW_Magic))
                     MWBase::Environment::get().getWindowManager()->cycleSpell(true);
                 break;
             case A_CycleWeaponLeft:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(MWGui::GW_Inventory))
+                if (inputManager->getControlSwitch("playercontrols") && checkAllowedToUseItems()
+                    && windowManager->isAllowed(MWGui::GW_Inventory))
                     MWBase::Environment::get().getWindowManager()->cycleWeapon(false);
                 break;
             case A_CycleWeaponRight:
-                if (checkAllowedToUseItems() && windowManager->isAllowed(MWGui::GW_Inventory))
+                if (inputManager->getControlSwitch("playercontrols") && checkAllowedToUseItems()
+                    && windowManager->isAllowed(MWGui::GW_Inventory))
                     MWBase::Environment::get().getWindowManager()->cycleWeapon(true);
                 break;
             case A_Inventory:
