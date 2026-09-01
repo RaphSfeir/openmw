@@ -147,6 +147,13 @@ namespace MWBase
         };
         virtual void inputEvent(const InputEvent& event) = 0;
 
+        /// Fork addition: a GUI sound was played locally (potion success or
+        /// fail, enchanting, repairs...). Reported to the player's Lua as an
+        /// 'MP_UiSound' event so multiplayer can share the ones worth
+        /// hearing; Lua curates, this only reports. The engine's own sound
+        /// is not affected.
+        virtual void uiSoundPlayed(std::string_view soundId) = 0;
+
         struct ActorControls
         {
             bool mDisableAI = false;

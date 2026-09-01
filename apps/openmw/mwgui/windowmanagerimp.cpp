@@ -2445,6 +2445,13 @@ namespace MWGui
 
         MWBase::Environment::get().getSoundManager()->playSound(
             soundId, volume, pitch, MWSound::Type::Sfx, MWSound::PlayMode::NoEnvNoScaling);
+        // Fork: tell Lua. Every meaningful GUI sound passes through here --
+        // potion success AND fail, enchanting, repairs -- so one report site
+        // covers what multiplayer wants neighbours to hear, and Lua decides
+        // which ids those are. TES3MP hand-hooked the same two windows this
+        // generalizes.
+        if (MWBase::LuaManager* luaManager = MWBase::Environment::get().getLuaManager())
+            luaManager->uiSoundPlayed(soundId.serializeText());
     }
 
     void WindowManager::updateSpellWindow()

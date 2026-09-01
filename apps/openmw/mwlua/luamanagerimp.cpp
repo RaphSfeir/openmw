@@ -342,6 +342,16 @@ namespace MWLua
                     playerScripts->processInputEvent(event);
             }
             mInputEvents.clear();
+            if (!mUiSoundEvents.empty())
+            {
+                // Each becomes an ordinary local event on the player object,
+                // with the sound id as the whole payload.
+                sol::state_view view(mLua.unsafeState());
+                for (const std::string& id : mUiSoundEvents)
+                    mLuaEvents.addLocalEvent({ getId(mPlayer), "MP_UiSound",
+                        LuaUtil::serialize(sol::make_object(view, id), mLocalSerializer.get()) });
+                mUiSoundEvents.clear();
+            }
             mLuaEvents.callMenuEventHandlers();
             float frameDuration = MWBase::Environment::get().getWorld()->getTimeManager()->isPaused()
                 ? 0.f
@@ -755,6 +765,16 @@ namespace MWLua
         }
         mMenuInputEvents.push_back(event);
     }
+
+    void LuaManager::uiSoundPlayed(std::string_view soundId)
+    {
+        // Main thread, same discipline as inputEvent above: queued raw and
+        // serialized at drain time, where the Lua state is ours to touch.
+        if (mPlayer.isEmpty() || soundId.empty())
+            return;
+        mUiSoundEvents.emplace_back(soundId);
+    }
+
 
     MWBase::LuaManager::ActorControls* LuaManager::getActorControls(const MWWorld::Ptr& ptr) const
     {

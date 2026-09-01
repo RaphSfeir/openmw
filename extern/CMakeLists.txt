@@ -295,6 +295,29 @@ if(WIN32)
     target_link_libraries(enet winmm ws2_32)
 endif()
 
+# Opus — voice codec for the multiplayer VoIP path (apps/openmw/mwsound).
+# Client-side only: it is linked into openmw-lib, never into components, so the
+# dedicated server keeps relaying voice frames without any audio dependency.
+#
+# Opus turns itself into a shared library whenever it sees BUILD_SHARED_LIBS
+# (its CMakeLists line 19), and the bullet/mygui blocks above FORCE that into
+# the cache on builds that do not use system packages. Shadow it with a normal
+# variable for opus's scope only, then unset to re-expose the cache value.
+set(BUILD_SHARED_LIBS OFF)
+set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+include(FetchContent)
+FetchContent_Declare(opus
+    URL https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz
+    URL_HASH SHA512=78d963cd56d5504611f111e2b3606e236189a3585d65fae1ecdbec9bf4545632b1956f11824328279a2d1ea2ecf441ebc11e455fb598d20a458df15185e95da4
+    SOURCE_DIR fetched/opus
+)
+FetchContent_MakeAvailable(opus)
+unset(BUILD_SHARED_LIBS)
+
 if ((BUILD_COMPONENTS_TESTS OR BUILD_OPENCS_TESTS OR BUILD_OPENMW_TESTS) AND NOT OPENMW_USE_SYSTEM_GOOGLETEST)
 
     include(FetchContent)

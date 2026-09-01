@@ -91,6 +91,7 @@ namespace MWLua
         void objectAddedToScene(const MWWorld::Ptr& ptr) override;
         void objectRemovedFromScene(const MWWorld::Ptr& ptr) override;
         void inputEvent(const InputEvent& event) override;
+        void uiSoundPlayed(std::string_view soundId) override;
         void itemConsumed(const MWWorld::Ptr& consumable, const MWWorld::Ptr& actor) override
         {
             mEngineEvents.addToQueue(EngineEvents::OnConsume{ getId(actor), getId(consumable) });
@@ -243,6 +244,7 @@ namespace MWLua
         LuaEvents mLuaEvents{ mGlobalScripts, mMenuScripts };
         EngineEvents mEngineEvents{ mGlobalScripts };
         std::vector<MWBase::LuaManager::InputEvent> mInputEvents;
+        std::vector<std::string> mUiSoundEvents;
         std::vector<MWBase::LuaManager::InputEvent> mMenuInputEvents;
 
         std::unique_ptr<LuaUtil::UserdataSerializer> mGlobalSerializer;
