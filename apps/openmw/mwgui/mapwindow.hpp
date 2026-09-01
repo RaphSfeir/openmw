@@ -10,6 +10,8 @@
 
 #include "windowpinnablebase.hpp"
 
+#include "../mwbase/windowmanager.hpp"
+
 #include <components/esm3/custommarkerstate.hpp>
 #include <components/misc/constants.hpp>
 
@@ -151,6 +153,8 @@ namespace MWGui
         std::map<std::pair<int, int>, std::vector<MarkerWidget*>> mExteriorDoorsByCell;
         std::vector<MarkerWidget*> mInteriorDoorMarkerWidgets;
         std::vector<MyGUI::Widget*> mMagicMarkerWidgets;
+        std::vector<MWBase::WindowManager::LiveMapMarker> mLiveMarkers;
+        std::vector<MyGUI::Widget*> mLiveMarkerWidgets;
         std::vector<MyGUI::Widget*> mCustomMarkerWidgets;
         std::vector<MarkerWidget*> mDoorMarkersToRecycle;
 
@@ -176,6 +180,16 @@ namespace MWGui
         void updateRequiredMaps();
 
         void updateMagicMarkers();
+        /// Live markers (other players). Refreshed on the same cadence as the
+        /// magic detection markers, which buys movement, zoom and cell-change
+        /// handling with one mechanism. Virtual so the map window can extend
+        /// the refresh to the world map.
+        virtual void updateLiveMarkers();
+
+    public:
+        void setLiveMarkers(const std::vector<MWBase::WindowManager::LiveMapMarker>& markers);
+
+    protected:
         void addDetectionMarkers(int type);
 
         void redraw();
@@ -257,6 +271,7 @@ namespace MWGui
         void onFrame(float dt) override;
 
         void updateCustomMarkers() override;
+        void updateLiveMarkers() override;
 
         /// Clear all savegame-specific data
         void clear() override;
@@ -296,6 +311,7 @@ namespace MWGui
         MyGUI::Widget* createMarker(const std::string& name, float x, float y, float agregatedWeight);
 
         MyGUI::ScrollView* mGlobalMap;
+        std::vector<MyGUI::Widget*> mGlobalLiveMarkerWidgets;
         std::unique_ptr<MyGUI::ITexture> mGlobalMapTexture;
         std::unique_ptr<MyGUI::ITexture> mGlobalMapOverlayTexture;
         MyGUI::ImageBox* mGlobalMapImage;

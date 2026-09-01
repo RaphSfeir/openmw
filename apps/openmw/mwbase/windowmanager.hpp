@@ -156,6 +156,23 @@ namespace MWBase
 
         /// \todo investigate, if we really need to expose every single lousy UI element to the outside world
         virtual MWGui::InventoryWindow* getInventoryWindow() = 0;
+
+        /// A marker some script wants drawn on the maps and moved as its
+        /// subject moves -- another player, in multiplayer, which is what this
+        /// exists for. Not a door, not a note, not saved anywhere: the list is
+        /// replaced wholesale on every update and dies with the process.
+        struct LiveMapMarker
+        {
+            float mWorldX = 0, mWorldY = 0; // world units, for the local map
+            std::string mWorldspace; // serialized worldspace id the position is in
+            std::string mLabel; // tooltip: who this is
+            bool mGlobal = false; // also on the world map?
+            float mGlobalX = 0, mGlobalY = 0; // exterior world units for it
+        };
+
+        /// Replace the live marker set on the HUD minimap, the local map and
+        /// the world map. Lua-driven (multiplayer player markers).
+        virtual void setLiveMapMarkers(const std::vector<LiveMapMarker>& markers) = 0;
         virtual MWGui::CountDialog* getCountDialog() = 0;
         virtual MWGui::ConfirmationDialog* getConfirmationDialog() = 0;
         virtual MWGui::TradeWindow* getTradeWindow() = 0;

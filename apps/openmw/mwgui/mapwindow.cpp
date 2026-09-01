@@ -20,6 +20,8 @@
 #include <components/settings/values.hpp>
 
 #include "../mwbase/environment.hpp"
+#include <components/debug/debuglog.hpp>
+
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -493,6 +495,7 @@ namespace MWGui
             updateMarkerCoordinates(widget, 8);
 
         updateMagicMarkers();
+        updateLiveMarkers();
         updateCustomMarkers();
     }
 
@@ -598,6 +601,7 @@ namespace MWGui
         {
             mMarkerUpdateTimer = 0;
             updateMagicMarkers();
+            updateLiveMarkers();
         }
 
         updateRequiredMaps();
@@ -751,6 +755,56 @@ namespace MWGui
             mMagicMarkerWidgets.push_back(markerWidget);
         }
 
+        redraw();
+    }
+
+    void LocalMapBase::setLiveMarkers(const std::vector<MWBase::WindowManager::LiveMapMarker>& markers)
+    {
+        mLiveMarkers = markers;
+        updateLiveMarkers();
+    }
+
+    void LocalMapBase::updateLiveMarkers()
+    {
+        // Same discipline as the detection markers above: destroy and
+        // recreate on every refresh, so nothing can leak or go stale. A
+        // session has a handful of players; this is a handful of widgets.
+        for (MyGUI::Widget* widget : mLiveMarkerWidgets)
+            MyGUI::Gui::getInstance().destroyWidget(widget);
+        mLiveMarkerWidgets.clear();
+        if (!mActiveCell)
+            return;
+        for (const auto& marker : mLiveMarkers)
+        {
+            // Only what shares this map's worldspace: a friend down in a tomb
+            // has no honest position on the Balmora street map.
+            if (ESM::RefId::deserializeText(marker.mWorldspace) != mActiveCell->getWorldSpace())
+                continue;
+            MarkerUserData markerPos(mLocalMapRender);
+            MarkerWidget* widget = mLocalMap->createWidget<MarkerWidget>("CustomMarkerButton",
+                getMarkerCoordinates(marker.mWorldX, marker.mWorldY, markerPos, 12), MyGUI::Align::Default);
+            widget->setDepth(Local_MarkerAboveFogLayer);
+            widget->setUserString("ToolTipType", "Layout");
+            widget->setUserString("ToolTipLayout", "TextToolTipOneLine");
+            widget->setUserString("Caption_TextOneLine", MyGUI::TextIterator::toTagsString(marker.mLabel));
+            // FULL COLOUR, not a tint. The CustomMarkerButton skin's texture
+            // is map_marker_red.dds -- a red image -- and a colour here
+            // MULTIPLIES it: the first version tinted green, and red times
+            // green is black. The markers were created, positioned, counted in
+            // the log, and invisible.
+            widget->setNormalColour(MyGUI::Colour(1.f, 1.f, 1.f));
+            widget->setHoverColour(MyGUI::Colour(1.f, 1.f, 0.6f));
+            widget->setNeedMouseFocus(true);
+            mLiveMarkerWidgets.push_back(widget);
+        }
+        // Verbose, permanently: a marker that does not appear can mean "none
+        // set", "wrong worldspace" or "widget failed", and those three are
+        // invisible from Lua. This one line separates them.
+        if (!mLiveMarkers.empty())
+            Log(Debug::Verbose) << "LiveMapMarkers: " << mLiveMarkers.size() << " set, "
+                                << mLiveMarkerWidgets.size() << " in worldspace "
+                                << mActiveCell->getWorldSpace() << " (first sent: "
+                                << mLiveMarkers.front().mWorldspace << ")";
         redraw();
     }
 
@@ -1305,6 +1359,36 @@ namespace MWGui
         MyGUI::IntPoint viewoffs(
             static_cast<int>(viewsize.width * 0.5f - pos.left), static_cast<int>(viewsize.height * 0.5f - pos.top));
         mGlobalMap->setViewOffset(viewoffs);
+    }
+
+    void MapWindow::updateLiveMarkers()
+    {
+        LocalMapBase::updateLiveMarkers();
+        for (MyGUI::Widget* widget : mGlobalLiveMarkerWidgets)
+            MyGUI::Gui::getInstance().destroyWidget(widget);
+        mGlobalLiveMarkerWidgets.clear();
+        for (const auto& marker : mLiveMarkers)
+        {
+            if (!marker.mGlobal)
+                continue; // indoors somewhere: no honest spot on the world map
+            float x, y;
+            worldPosToGlobalMapImageSpace(marker.mGlobalX, marker.mGlobalY, x, y);
+            MarkerWidget* widget = mGlobalMap->createWidget<MarkerWidget>("CustomMarkerButton",
+                MyGUI::IntCoord(static_cast<int>(x) - 6, static_cast<int>(y) - 6, 12, 12),
+                MyGUI::Align::Default);
+            widget->setUserString("ToolTipType", "Layout");
+            widget->setUserString("ToolTipLayout", "TextToolTipOneLine");
+            widget->setUserString("Caption_TextOneLine", MyGUI::TextIterator::toTagsString(marker.mLabel));
+            // FULL COLOUR, not a tint. The CustomMarkerButton skin's texture
+            // is map_marker_red.dds -- a red image -- and a colour here
+            // MULTIPLIES it: the first version tinted green, and red times
+            // green is black. The markers were created, positioned, counted in
+            // the log, and invisible.
+            widget->setNormalColour(MyGUI::Colour(1.f, 1.f, 1.f));
+            widget->setHoverColour(MyGUI::Colour(1.f, 1.f, 0.6f));
+            widget->setNeedMouseFocus(true);
+            mGlobalLiveMarkerWidgets.push_back(widget);
+        }
     }
 
     void MapWindow::setGlobalMapPlayerPosition(float worldX, float worldY)

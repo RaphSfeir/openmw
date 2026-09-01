@@ -1656,6 +1656,18 @@ namespace MWGui
     {
         return mInventoryWindow;
     }
+
+    void WindowManager::setLiveMapMarkers(const std::vector<LiveMapMarker>& markers)
+    {
+        // Both surfaces hold their own copy: they are two LocalMapBase
+        // instances with separate widget trees, and the map window also
+        // paints the world map. Null before loadUserInterface (early boot),
+        // where a marker nobody can see is simply dropped.
+        if (mMap)
+            mMap->setLiveMarkers(markers);
+        if (mHud)
+            mHud->setLiveMarkers(markers);
+    }
     MWGui::CountDialog* WindowManager::getCountDialog()
     {
         return mCountDialog;
