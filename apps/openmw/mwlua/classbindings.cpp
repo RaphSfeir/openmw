@@ -205,6 +205,11 @@ namespace MWLua
     {
         sol::state_view lua = context.sol();
         sol::table classes(lua, sol::create);
+        // The draft half of the pair: build an ESM::Class from a plain table so
+        // a script can hand it to world.createRecord. tableToClass is the same
+        // converter the content store uses, so a drafted class and one loaded
+        // from a plugin are the same shape.
+        classes["createRecordDraft"] = tableToClass;
         addRecordFunctionBinding<ESM::Class>(classes, context);
         addUserType<ESM::Class>(lua, "ESM3_Class");
         return LuaUtil::makeReadOnly(classes);

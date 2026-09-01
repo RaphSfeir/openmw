@@ -4,6 +4,7 @@
 #include <components/esm3/loadalch.hpp>
 #include <components/esm3/loadarmo.hpp>
 #include <components/esm3/loadbook.hpp>
+#include <components/esm3/loadclas.hpp>
 #include <components/esm3/loadclot.hpp>
 #include <components/esm3/loadcont.hpp>
 #include <components/esm3/loadcrea.hpp>
@@ -319,6 +320,17 @@ namespace MWLua
                 ESM::NPC copy = npc;
                 copy.mId = {};
                 return MWBase::Environment::get().getESMStore()->insert(copy);
+            },
+            // A CLASS, which the player's own sheet needs and nothing else could
+            // make. Every other creatable record here describes a thing in the
+            // world; a class describes a character, and without it a character
+            // imported from another server can only ever be forced into one of
+            // the twenty-one presets -- losing the major/minor skills that
+            // decide how they level. tableToClass already existed for the
+            // content store; this is the same record, insertable at runtime.
+            [lua = context.mLua](const ESM::Class& cls) -> const ESM::Class* {
+                checkGameInitialized(lua);
+                return MWBase::Environment::get().getESMStore()->insert(cls);
             },
             [lua = context.mLua](const ESM::Creature& crea) -> const ESM::Creature* {
                 checkGameInitialized(lua);

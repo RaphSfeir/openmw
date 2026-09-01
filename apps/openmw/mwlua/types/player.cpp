@@ -9,6 +9,7 @@
 #include <components/lua/util.hpp>
 
 #include "../birthsignbindings.hpp"
+#include "../classbindings.hpp"
 #include "../luamanagerimp.hpp"
 
 #include "apps/openmw/mwbase/dialoguemanager.hpp"
@@ -449,6 +450,28 @@ namespace MWLua
         //
         // Queued like every other Lua mutation, and the same caller rule as
         // setName above.
+        // A CUSTOM CLASS, the way the game's own chargen makes one.
+        //
+        // setClass names a class that already exists, which is every case except
+        // the one that matters here: Morrowind lets a player invent a class, and
+        // characters imported from another server wear one no content file has
+        // ever heard of. Creating the record and then naming it does NOT work --
+        // ESMStore::insert assigns its own id, so the id you asked for is not
+        // the id you get. MechanicsManager::setPlayerClass is the engine's own
+        // answer: it inserts, points the player at the id that came back, and
+        // rebuilds the derived stats, all in one step. This is that call.
+        player["setCustomClass"] = [context](const Object& object, const sol::table& rec) {
+            verifyPlayer(object);
+            if (object.isLObject() && !object.isSelfObject())
+                throw std::runtime_error("Only player and global scripts can set the player's class.");
+            ESM::Class cls = tableToClass(rec);
+            if (cls.mName.empty())
+                throw std::runtime_error("setCustomClass: the class needs a name");
+            context.mLuaManager->addAction(
+                [cls] { MWBase::Environment::get().getMechanicsManager()->setPlayerClass(cls); },
+                "setCustomClassAction");
+        };
+
         player["setClass"] = [context](const Object& object, std::string_view classId) {
             verifyPlayer(object);
             if (object.isLObject() && !object.isSelfObject())
