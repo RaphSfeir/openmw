@@ -15,9 +15,11 @@
 #include "apps/openmw/mwbase/dialoguemanager.hpp"
 #include "apps/openmw/mwbase/inputmanager.hpp"
 #include "apps/openmw/mwbase/journal.hpp"
+#include "apps/openmw/mwbase/windowmanager.hpp"
 #include "apps/openmw/mwbase/mechanicsmanager.hpp"
 #include "apps/openmw/mwbase/world.hpp"
 #include "apps/openmw/mwmechanics/npcstats.hpp"
+#include "apps/openmw/mwgui/inventorywindow.hpp"
 #include "apps/openmw/mwworld/class.hpp"
 #include "apps/openmw/mwworld/esmstore.hpp"
 #include "apps/openmw/mwworld/globals.hpp"
@@ -541,11 +543,54 @@ namespace MWLua
                     // abilities at all, and no attribute or skill bonuses either:
                     // a High Elf with none of what makes one. setPlayerRace is
                     // chargen's own call and does the whole job, rebuild included.
+                    const bool willChange = was.mRace != race || was.mHead != (head ? *head : was.mHead)
+                        || was.mHair != (hair ? *hair : was.mHair)
+                        || was.isMale() != (isMale ? *isMale : was.isMale());
                     MWBase::Environment::get().getMechanicsManager()->setPlayerRace(race,
                         isMale ? *isMale : was.isMale(),
                         head ? *head : was.mHead,
                         hair ? *hair : was.mHair);
-                    world->renderPlayer();
+                    // ONLY IF THE MECHANICS MANAGER DID NOT ALREADY DO IT.
+                    //
+                    // setPlayerRace calls renderPlayer() itself, but only inside
+                    // its own "did the record actually change" guard. Calling it
+                    // again unconditionally ran the whole of World::renderPlayer
+                    // TWICE on every restore that changed anything: two
+                    // NpcAnimation constructions with skeleton and body-part
+                    // loading, two mechanics remove/add cycles, two physics
+                    // actor rebuilds -- a visible hitch on join, and twice the
+                    // window in which the player has no physics actor. The call
+                    // is still needed for the other branch, where the record was
+                    // already correct and nothing rendered.
+                    if (!willChange)
+                        world->renderPlayer();
+                    // AND THE INVENTORY DOLL, which is a SECOND body.
+                    //
+                    // renderPlayer() rebuilds the world model only. The figure
+                    // in the inventory menu is a separate MWRender::NpcAnimation
+                    // owned by MWRender::InventoryPreview, and the only thing
+                    // that rebuilds it is InventoryWindow::rebuildAvatar() --
+                    // whose sole caller in the whole engine is chargen's
+                    // CharacterCreation::selectRace(). Multiplayer never runs
+                    // chargen, so nothing ever called it: the doll kept the
+                    // skeleton, head and hair it was built with on the
+                    // --skip-menu start, from Morrowind.esm's default "player"
+                    // record, and no later restore reached it.
+                    //
+                    // Not simply "an old character", either. updateParts re-reads
+                    // the race off the (in-place updated) record every frame and
+                    // re-derives the body, hands, legs and feet from it, while
+                    // the head and hair stay CACHED from the constructor -- so
+                    // the doll becomes a chimera: the new race's body wearing the
+                    // old one's face. Reported from play, accurately, as "the
+                    // portrait is rendered with a different appearance".
+                    //
+                    // Unconditional, unlike the render above: the doll can be
+                    // stale even when the record already matches, which is
+                    // exactly the case a guard here would skip.
+                    if (MWGui::InventoryWindow* inv
+                        = MWBase::Environment::get().getWindowManager()->getInventoryWindow())
+                        inv->rebuildAvatar();
                 },
                 "setRaceAction");
         };
