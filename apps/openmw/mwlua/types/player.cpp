@@ -530,17 +530,21 @@ namespace MWLua
             context.mLuaManager->addAction(
                 [race, isMale, head, hair] {
                     MWBase::World* world = MWBase::Environment::get().getWorld();
-                    ESM::NPC record = *world->getPlayerPtr().get<ESM::NPC>()->mBase;
-                    record.mRace = race;
-                    if (isMale)
-                        record.setIsMale(*isMale);
-                    if (head)
-                        record.mHead = *head;
-                    if (hair)
-                        record.mHair = *hair;
-                    world->getStore().insert(record);
-                    // The body actually changed, so the Animation object has to
-                    // be rebuilt. This is the call chargen's race dialog makes.
+                    const ESM::NPC& was = *world->getPlayerPtr().get<ESM::NPC>()->mBase;
+                    // THROUGH THE MECHANICS MANAGER, not by writing the record.
+                    //
+                    // Writing mRace directly and calling renderPlayer() changes
+                    // what the character LOOKS like and nothing else. The engine
+                    // grants a race's powers in buildPlayer(), and only inside
+                    // `if (mRaceSelected)` -- a flag set by setPlayerRace alone.
+                    // So a race applied by hand left the character with no racial
+                    // abilities at all, and no attribute or skill bonuses either:
+                    // a High Elf with none of what makes one. setPlayerRace is
+                    // chargen's own call and does the whole job, rebuild included.
+                    MWBase::Environment::get().getMechanicsManager()->setPlayerRace(race,
+                        isMale ? *isMale : was.isMale(),
+                        head ? *head : was.mHead,
+                        hair ? *hair : was.mHair);
                     world->renderPlayer();
                 },
                 "setRaceAction");
