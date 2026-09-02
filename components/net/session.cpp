@@ -1,6 +1,7 @@
 #include "session.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <deque>
 #include <map>
@@ -16,8 +17,27 @@ namespace Net
 {
     namespace
     {
-        constexpr std::size_t sNumChannels = 2;
+        constexpr std::size_t sNumChannels = Session::sChannelCount;
         constexpr int sMaxEventsPerPump = 256;
+        // Diverted messages do not spend the gameplay budget, but they still
+        // have to be bounded or a flood on a claimed channel would pin the pump
+        // thread for as long as the sender cared to keep going.
+        constexpr int sMaxDivertedPerPump = 1024;
+
+        std::uint32_t packetFlags(Delivery delivery)
+        {
+            switch (delivery)
+            {
+                case Delivery::Reliable:
+                    return ENET_PACKET_FLAG_RELIABLE;
+                case Delivery::Unreliable:
+                    return 0;
+                case Delivery::Unsequenced:
+                    return ENET_PACKET_FLAG_UNSEQUENCED;
+            }
+            return 0;
+        }
+
         constexpr std::chrono::seconds sConnectTimeout(8);
         // How long a live peer may go silent before the link is abandoned. See the
         // note at the ENET_EVENT_TYPE_CONNECT case: ENet's own default works out to a
@@ -62,7 +82,7 @@ namespace Net
         {
             std::uint32_t mTo;
             std::uint8_t mChannel;
-            bool mReliable;
+            Delivery mDelivery;
             std::string mData;
         };
     }
@@ -78,6 +98,25 @@ namespace Net
         bool mConnected = false;
         std::vector<std::uint32_t> mPeerIds;
         std::string mLastError;
+
+        // Per-channel outgoing caps and their drop counters, guarded by mMutex
+        // alongside mOutQueue.
+        std::array<std::size_t, Session::sMaxChannels> mOutLimit{};
+        std::array<std::size_t, Session::sMaxChannels> mOutCount{};
+        std::array<std::uint64_t, Session::sMaxChannels> mOutDropped{};
+
+        // Copy-on-write so the pump can take one snapshot per tick instead of
+        // locking per packet, and so a handler stays alive for the duration of
+        // a call that a concurrent swap would otherwise pull out from under it.
+        using HandlerTable = std::array<Session::ChannelHandler, Session::sMaxChannels>;
+        mutable std::mutex mHandlerMutex;
+        std::shared_ptr<const HandlerTable> mHandlers;
+
+        std::shared_ptr<const HandlerTable> snapshotHandlers() const
+        {
+            const std::lock_guard<std::mutex> lock(mHandlerMutex);
+            return mHandlers;
+        }
 
         // Pump-thread only.
         ENetHost* mHost = nullptr;
@@ -206,26 +245,30 @@ namespace Net
             if (mHost == nullptr)
                 return;
             const std::uint8_t channel = std::min<std::uint8_t>(out.mChannel, sNumChannels - 1);
-            const std::uint32_t flags = out.mReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
-            ENetPacket* packet = enet_packet_create(out.mData.data(), out.mData.size(), flags);
+            ENetPacket* packet = enet_packet_create(out.mData.data(), out.mData.size(), packetFlags(out.mDelivery));
             if (packet == nullptr)
                 return;
+
+            // enet_peer_send hands the packet back on failure rather than
+            // freeing it, and it fails for an ordinary reason now that there is
+            // a channel not every peer has: a build made before channel 2
+            // existed negotiates two channels, and everything aimed at its
+            // third one is refused. Ignoring the result there would leak a
+            // packet and its payload fifty times a second per such peer.
+            ENetPeer* target = nullptr;
             if (mLiveRole == Role::Client)
             {
                 if (mServerPeer != nullptr && mLiveConnected)
-                    enet_peer_send(mServerPeer, channel, packet);
-                else
-                    enet_packet_destroy(packet);
+                    target = mServerPeer;
             }
             else if (mLiveRole == Role::Host)
             {
                 auto it = mPeers.find(out.mTo);
                 if (it != mPeers.end())
-                    enet_peer_send(it->second, channel, packet);
-                else
-                    enet_packet_destroy(packet);
+                    target = it->second;
             }
-            else
+
+            if (target == nullptr || enet_peer_send(target, channel, packet) < 0)
                 enet_packet_destroy(packet);
         }
 
@@ -234,19 +277,51 @@ namespace Net
             if (mHost == nullptr || mLiveRole != Role::Host)
                 return;
             const std::uint8_t channel = std::min<std::uint8_t>(out.mChannel, sNumChannels - 1);
-            const std::uint32_t flags = out.mReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
-            ENetPacket* packet = enet_packet_create(out.mData.data(), out.mData.size(), flags);
+            ENetPacket* packet = enet_packet_create(out.mData.data(), out.mData.size(), packetFlags(out.mDelivery));
+            // Unlike enet_peer_send, the broadcast path disposes of a packet no
+            // peer accepted, so there is nothing to clean up here.
             if (packet != nullptr)
                 enet_host_broadcast(mHost, channel, packet);
         }
 
-        void service()
+        void service(const std::shared_ptr<const HandlerTable>& handlers)
         {
             if (mHost == nullptr)
                 return;
             ENetEvent event;
-            for (int i = 0; i < sMaxEventsPerPump && enet_host_service(mHost, &event, 0) > 0; ++i)
+            // Two budgets, because a claimed channel must neither starve
+            // gameplay nor be starved by it. Gameplay is checked before an event
+            // is taken off ENet, so nothing is ever dequeued and thrown away;
+            // diverted messages spend only the larger total.
+            int gameplay = 0;
+            int total = 0;
+            while (gameplay < sMaxEventsPerPump && total < sMaxEventsPerPump + sMaxDivertedPerPump
+                && enet_host_service(mHost, &event, 0) > 0)
             {
+                ++total;
+                if (event.type == ENET_EVENT_TYPE_RECEIVE && handlers != nullptr
+                    && event.channelID < Session::sMaxChannels && (*handlers)[event.channelID])
+                {
+                    const std::uint32_t id = mLiveRole == Role::Host ? peerId(event.peer) : sServerPeerId;
+                    try
+                    {
+                        (*handlers)[event.channelID](id,
+                            std::string_view(
+                                reinterpret_cast<const char*>(event.packet->data), event.packet->dataLength));
+                    }
+                    catch (const std::exception& e)
+                    {
+                        // An escaping exception would skip the destroy below and
+                        // leak the packet, once per message, for as long as
+                        // whatever is wrong keeps being wrong.
+                        Log(Debug::Error) << "Net: channel " << static_cast<int>(event.channelID)
+                                          << " handler threw: " << e.what();
+                    }
+                    enet_packet_destroy(event.packet);
+                    continue;
+                }
+
+                ++gameplay;
                 switch (event.type)
                 {
                     case ENET_EVENT_TYPE_CONNECT:
@@ -403,19 +478,69 @@ namespace Net
         return mImpl->mLastError;
     }
 
-    void Session::send(std::uint32_t to, std::uint8_t channel, bool reliable, std::string data)
+    void Session::send(std::uint32_t to, std::uint8_t channel, Delivery delivery, std::string data)
     {
         std::lock_guard lock(mImpl->mMutex);
-        mImpl->mOutQueue.push_back(Outgoing{ to, channel, reliable, std::move(data) });
+
+        if (channel < sMaxChannels && mImpl->mOutLimit[channel] != 0)
+        {
+            while (mImpl->mOutCount[channel] >= mImpl->mOutLimit[channel])
+            {
+                // Drop from the front of this channel, not the back. A caller
+                // that hit the cap is producing faster than the pump can drain,
+                // and for a stream the oldest entry is the one least worth
+                // keeping: playing out a loading screen's worth of stale speech
+                // is worse than losing it.
+                const auto stale = std::find_if(mImpl->mOutQueue.begin(), mImpl->mOutQueue.end(),
+                    [channel](const Outgoing& queued) { return queued.mChannel == channel; });
+                if (stale == mImpl->mOutQueue.end())
+                {
+                    mImpl->mOutCount[channel] = 0;
+                    break;
+                }
+                mImpl->mOutQueue.erase(stale);
+                --mImpl->mOutCount[channel];
+                ++mImpl->mOutDropped[channel];
+            }
+            ++mImpl->mOutCount[channel];
+        }
+
+        mImpl->mOutQueue.push_back(Outgoing{ to, channel, delivery, std::move(data) });
     }
 
-    void Session::broadcast(std::uint8_t channel, bool reliable, std::string data)
+    void Session::broadcast(std::uint8_t channel, Delivery delivery, std::string data)
     {
-        // Broadcast is encoded as a send to the (invalid as a target) server id with a marker
-        // channel bit; use a dedicated queue entry flag instead: reuse Outgoing with mTo set
-        // to the broadcast marker.
+        // Broadcast is encoded as a send to the broadcast marker rather than a
+        // real peer id, so it goes through send() and inherits the same cap.
+        send(sBroadcastMarker, channel, delivery, std::move(data));
+    }
+
+    void Session::setChannelHandler(std::uint8_t channel, ChannelHandler handler)
+    {
+        if (channel >= sMaxChannels)
+            return;
+
+        const std::lock_guard<std::mutex> lock(mImpl->mHandlerMutex);
+        auto table = mImpl->mHandlers != nullptr ? std::make_shared<Impl::HandlerTable>(*mImpl->mHandlers)
+                                                 : std::make_shared<Impl::HandlerTable>();
+        (*table)[channel] = std::move(handler);
+        mImpl->mHandlers = std::move(table);
+    }
+
+    void Session::setChannelSendLimit(std::uint8_t channel, std::size_t maxQueued)
+    {
+        if (channel >= sMaxChannels)
+            return;
         std::lock_guard lock(mImpl->mMutex);
-        mImpl->mOutQueue.push_back(Outgoing{ sBroadcastMarker, channel, reliable, std::move(data) });
+        mImpl->mOutLimit[channel] = maxQueued;
+    }
+
+    std::uint64_t Session::droppedSends(std::uint8_t channel) const
+    {
+        if (channel >= sMaxChannels)
+            return 0;
+        std::lock_guard lock(mImpl->mMutex);
+        return mImpl->mOutDropped[channel];
     }
 
     std::vector<Event> Session::drainEvents()
@@ -434,6 +559,7 @@ namespace Net
             std::lock_guard lock(mImpl->mMutex);
             control.swap(mImpl->mControlQueue);
             out.swap(mImpl->mOutQueue);
+            mImpl->mOutCount.fill(0);
         }
         for (const ControlRequest& request : control)
         {
@@ -446,14 +572,42 @@ namespace Net
             else
                 mImpl->doDisconnect();
         }
-        for (const Outgoing& outgoing : out)
+        const auto flush = [this](const std::deque<Outgoing>& queue) {
+            for (const Outgoing& outgoing : queue)
+            {
+                if (outgoing.mTo == sBroadcastMarker && mImpl->mLiveRole == Role::Host)
+                    mImpl->broadcastOne(outgoing);
+                else
+                    mImpl->sendOne(outgoing);
+            }
+        };
+
+        flush(out);
+        mImpl->service(mImpl->snapshotHandlers());
+
+        // A channel handler is where a relay lives, so most of what it produces
+        // is queued during the service() above. Draining once more here is what
+        // keeps a relayed packet from waiting a whole tick for the next pump.
         {
-            if (outgoing.mTo == sBroadcastMarker && mImpl->mLiveRole == Role::Host)
-                mImpl->broadcastOne(outgoing);
-            else
-                mImpl->sendOne(outgoing);
+            std::deque<Outgoing> relayed;
+            {
+                std::lock_guard lock(mImpl->mMutex);
+                relayed.swap(mImpl->mOutQueue);
+                mImpl->mOutCount.fill(0);
+            }
+            flush(relayed);
+
+            // enet_peer_send only queues onto the peer's outgoing command list;
+            // the datagram itself leaves when the host is serviced, and
+            // service() above has already had its turn. Without this the frame
+            // a handler just produced would sit until the next pump, which is
+            // the whole latency this second drain was meant to avoid. The host
+            // can be gone by now: a disconnect handled inside service() tears
+            // it down.
+            if (!relayed.empty() && mImpl->mHost != nullptr)
+                enet_host_flush(mImpl->mHost);
         }
-        mImpl->service();
+
         mImpl->checkConnectTimeout();
         mImpl->updateSnapshot();
     }

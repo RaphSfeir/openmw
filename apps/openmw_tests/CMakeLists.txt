@@ -20,6 +20,10 @@ file(GLOB UNITTEST_SRC_FILES
     mwscript/testscripts.cpp
 
     mwsound/testheadcache.cpp
+    mwsound/testloudness.cpp
+    mwsound/testsoundmanagerclear.cpp
+    mwsound/testvoicecodec.cpp
+    mwsound/testnetworkvoicedecoder.cpp
 )
 
 if (MSVC)

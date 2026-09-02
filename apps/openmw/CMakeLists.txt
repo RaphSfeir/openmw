@@ -67,12 +67,13 @@ add_openmw_dir (mwlua
     types/types types/door types/item types/actor types/container types/lockable types/weapon types/npc types/bodypart
     types/creature types/player types/activator types/book types/lockpick types/probe types/apparatus
     types/potion types/ingredient types/misc types/repair types/armor types/light types/static
-    types/clothing types/levelledlist types/terminal magictypebindings
+    types/clothing types/levelledlist types/terminal magictypebindings voipbindings
     )
 
 add_openmw_dir (mwsound
     soundmanagerimp openaloutput ffmpegdecoder headcache sound soundbuffer sounddecoder soundoutput
     loudness movieaudiofactory alext efx efxpresets regionsoundselector watersoundupdater
+    voicecodec voicecapture networkvoicedecoder voicestream voipmanager
     )
 
 add_openmw_dir (mwworld
@@ -182,6 +183,10 @@ target_link_libraries(openmw-lib
     ${OSG_LIBRARIES}
     Boost::program_options
     ${OPENAL_LIBRARY}
+    # Voice codec for multiplayer VoIP. Deliberately linked here and not into
+    # components: the dedicated server links components only, and must stay free
+    # of any audio dependency.
+    opus
     ${FFmpeg_LIBRARIES}
     ${MyGUI_LIBRARIES}
     SDL2::SDL2

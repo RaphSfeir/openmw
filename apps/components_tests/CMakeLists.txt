@@ -20,12 +20,17 @@ file(GLOB UNITTEST_SRC_FILES
     lua/testutilpackage.cpp
     lua/testyaml.cpp
 
+    net/session.cpp
+
     misc/compression.cpp
     misc/progressreporter.cpp
     misc/testendianness.cpp
     misc/testmathutil.cpp
     misc/testresourcehelpers.cpp
     misc/teststringops.cpp
+
+    voip/jitterbuffer.cpp
+    voip/relay.cpp
 
     nifloader/testbulletnifloader.cpp
 

@@ -11,6 +11,7 @@
 #include <components/lua/jsonmirror.hpp>
 #include <components/lua/serialization.hpp>
 #include <components/net/session.hpp>
+#include <components/voip/relay.hpp>
 
 #include "config.hpp"
 
@@ -39,7 +40,7 @@ namespace MPServer
         // numbers: the two ends have to agree about what "reliable" means, and
         // the cheapest guarantee of that is the same code twice rather than a
         // shared header nobody reads.
-        sol::table networkPackage(sol::state& lua, Net::Session& session)
+        sol::table networkPackage(sol::state& lua, Net::Session& session, Voip::Relay& relay)
         {
             sol::table api(lua, sol::create);
             api["host"] = [&session](sol::optional<int> port, sol::optional<int> maxPeers) {
@@ -119,6 +120,56 @@ namespace MPServer
                 }
                 return result;
             };
+
+            // Voice policy. The frames themselves never come through Lua - they
+            // are relayed in C++ on their own channel - so all that crosses here
+            // is the decision of whether to relay at all, for whom, and to whom.
+            api["voipEnable"] = [&relay](bool enabled) { relay.setEnabled(enabled); };
+            api["voipSetCapable"]
+                = [&relay](std::uint32_t peer, bool capable) { return relay.setCapable(peer, capable); };
+            api["voipRoute"] = [&relay](std::uint32_t from, sol::optional<sol::table> targets) {
+                // No table means "no exception": back to the default of
+                // everyone except the speaker.
+                if (!targets.has_value())
+                {
+                    relay.clearRoute(from);
+                    return true;
+                }
+                std::vector<std::uint32_t> peers;
+                for (const auto& [key, value] : targets.value())
+                {
+                    if (value.is<std::uint32_t>())
+                        peers.push_back(value.as<std::uint32_t>());
+                }
+                return relay.setRoute(from, peers);
+            };
+            api["voipStats"] = [&relay](sol::this_state s) {
+                sol::state_view view(s);
+                sol::table result(view, sol::create);
+                const Voip::RelayCounters& counters = relay.counters();
+                result["enabled"] = relay.enabled();
+                result["tracked"] = relay.trackedPeers();
+                result["capable"] = relay.capablePeers();
+                result["routed"] = relay.routedPeers();
+                // Lua here has no 64-bit integer, so the counters cross as
+                // doubles. They are exact well past any session length.
+                result["received"] = static_cast<double>(counters.mReceived);
+                result["forwarded"] = static_cast<double>(counters.mForwarded);
+                result["bytesIn"] = static_cast<double>(counters.mBytesIn);
+                result["bytesOut"] = static_cast<double>(counters.mBytesOut);
+                result["droppedDisabled"] = static_cast<double>(counters.mDroppedDisabled);
+                result["droppedNotCapable"] = static_cast<double>(counters.mDroppedNotCapable);
+                result["droppedMalformed"] = static_cast<double>(counters.mDroppedMalformed);
+                result["droppedVersion"] = static_cast<double>(counters.mDroppedVersion);
+                result["droppedOversize"] = static_cast<double>(counters.mDroppedOversize);
+                result["droppedRate"] = static_cast<double>(counters.mDroppedRate);
+                result["droppedNoRoute"] = static_cast<double>(counters.mDroppedNoRoute);
+                result["spoofedOrigin"] = static_cast<double>(counters.mSpoofedOrigin);
+                result["prunedPeers"] = static_cast<double>(counters.mPrunedPeers);
+                result["refusedPeers"] = static_cast<double>(counters.mRefusedPeers);
+                return result;
+            };
+
             return api;
         }
 
@@ -290,10 +341,10 @@ namespace MPServer
         }
     }
 
-    void installShim(sol::state& lua, Net::Session& session, const Config& config)
+    void installShim(sol::state& lua, Net::Session& session, Voip::Relay& relay, const Config& config)
     {
         sol::table loaded = lua["package"]["loaded"];
-        loaded["openmw.network"] = networkPackage(lua, session);
+        loaded["openmw.network"] = networkPackage(lua, session, relay);
         loaded["openmw.campaign"] = campaignPackage(lua, config);
         loaded["openmw.core"] = corePackage(lua, config);
         loaded["openmw.world"] = worldPackage(lua);

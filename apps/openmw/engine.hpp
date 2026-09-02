@@ -86,6 +86,7 @@ namespace MWInput
 namespace MWSound
 {
     class SoundManager;
+    class VoipManager;
 }
 
 namespace MWWorld
@@ -132,6 +133,7 @@ namespace OMW
         std::unique_ptr<SceneUtil::UnrefQueue> mUnrefQueue;
         std::unique_ptr<MWWorld::World> mWorld;
         std::unique_ptr<MWSound::SoundManager> mSoundManager;
+        std::unique_ptr<MWSound::VoipManager> mVoipManager;
         std::unique_ptr<MWScript::ScriptManager> mScriptManager;
         std::unique_ptr<MWGui::WindowManager> mWindowManager;
         std::unique_ptr<MWMechanics::MechanicsManager> mMechanicsManager;

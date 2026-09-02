@@ -38,6 +38,11 @@ namespace MWSound
         float mPitch = 1.0f;
         float mMinDistance = 1.0f;
         float mMaxDistance = 1000.0f;
+        // Gain floor and steepness of the distance curve. The defaults are the
+        // values the output hardwired before either was settable, so anything
+        // that leaves them alone sounds exactly as it did.
+        float mMinGain = 0.0f;
+        float mRolloff = 1.0f;
         int mFlags = 0;
         float mFadeVolume = 1.0f;
         float mFadeTarget = 0.0f;
@@ -160,6 +165,8 @@ namespace MWSound
         float getPitch() const { return mParams.mPitch; }
         float getMinDistance() const { return mParams.mMinDistance; }
         float getMaxDistance() const { return mParams.mMaxDistance; }
+        float getMinGain() const { return mParams.mMinGain; }
+        float getRolloff() const { return mParams.mRolloff; }
 
         MWSound::Type getPlayType() const { return static_cast<MWSound::Type>(mParams.mFlags & MWSound::Type::Mask); }
         bool getUseEnv() const { return !(mParams.mFlags & MWSound::PlayMode::NoEnv); }

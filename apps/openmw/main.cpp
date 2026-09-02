@@ -8,6 +8,7 @@
 #include <components/version/version.hpp>
 
 #include "mwgui/debugwindow.hpp"
+#include "mwsound/voicecapture.hpp"
 
 #include "engine.hpp"
 #include "options.hpp"
@@ -67,6 +68,15 @@ bool parseOptions(int argc, char** argv, OMW::Engine& engine, Files::Configurati
 
     Debug::setupLogging(cfgMgr.getLogPath(), "OpenMW");
     Log(Debug::Info) << Version::getOpenmwVersionDescription();
+
+    // Before the engine, the window or any content: capture either works on this
+    // machine or it does not, and finding that out should not require a server.
+    if (variables.count("voip-mic-test"))
+    {
+        const std::filesystem::path wav = cfgMgr.getLogPath() / "voicetest.wav";
+        MWSound::runVoiceMicTest(variables["voip-mic-test"].as<std::string>(), wav, 3);
+        return false;
+    }
 
     Settings::Manager::load(cfgMgr);
 

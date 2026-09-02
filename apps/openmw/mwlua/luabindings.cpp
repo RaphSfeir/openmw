@@ -27,6 +27,7 @@
 #include "types/types.hpp"
 #include "uibindings.hpp"
 #include "vfsbindings.hpp"
+#include "voipbindings.hpp"
 #include "worldbindings.hpp"
 
 namespace MWLua
@@ -81,6 +82,7 @@ namespace MWLua
             { "openmw.map", initMapPackage(context) },
             { "openmw.postprocessing", initPostprocessingPackage(context) },
             { "openmw.ui", initUserInterfacePackage(context) },
+            { "openmw.voip", initVoipPlayerPackage(context) },
         };
     }
 

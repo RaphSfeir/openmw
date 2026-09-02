@@ -22,6 +22,11 @@ namespace MWWorld
     class Scene;
 }
 
+namespace MWSound
+{
+    class VoipManager;
+}
+
 namespace MWBase
 {
     class World;
@@ -48,6 +53,7 @@ namespace MWBase
         MWWorld::Scene* mWorldScene = nullptr;
         MWWorld::ESMStore* mESMStore = nullptr;
         SoundManager* mSoundManager = nullptr;
+        MWSound::VoipManager* mVoipManager = nullptr;
         ScriptManager* mScriptManager = nullptr;
         WindowManager* mWindowManager = nullptr;
         MechanicsManager* mMechanicsManager = nullptr;
@@ -77,6 +83,8 @@ namespace MWBase
 
         void setSoundManager(SoundManager& value) { mSoundManager = &value; }
 
+        void setVoipManager(MWSound::VoipManager& value) { mVoipManager = &value; }
+
         void setScriptManager(ScriptManager& value) { mScriptManager = &value; }
 
         void setWindowManager(WindowManager& value) { mWindowManager = &value; }
@@ -103,6 +111,12 @@ namespace MWBase
         Misc::NotNullPtr<MWWorld::ESMStore> getESMStore() const { return mESMStore; }
 
         Misc::NotNullPtr<SoundManager> getSoundManager() const { return mSoundManager; }
+
+        // Nullable, unlike every other manager here: a client started with
+        // --no-sound, or one still coming up, genuinely has no voice subsystem,
+        // and the NotNullPtr idiom would turn "this machine cannot do voice"
+        // into an assertion failure. Callers check.
+        MWSound::VoipManager* getVoipManager() const { return mVoipManager; }
 
         Misc::NotNullPtr<ScriptManager> getScriptManager() const { return mScriptManager; }
 

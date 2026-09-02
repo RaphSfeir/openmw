@@ -43,6 +43,15 @@ namespace MWSound
         constexpr float sSfxFadeOutDuration = 1.0f;
         constexpr float sSoundCullDistance = 2000.f;
 
+        // Four 20 ms buffers. A refill always tops the queue back up to its
+        // full depth, so all of it is mouth-to-ear latency all of the time and
+        // an underrun ratchets it straight back to full: even 80 ms spends half
+        // the budget before the microphone, the encoder and the jitter buffer
+        // have cost anything. Given in samples rather than seconds because the
+        // seconds form truncates, and 0.02f * 48000 comes out at 959, which is
+        // not a codec frame.
+        constexpr StreamGeometry sVoiceStreamGeometry{ .mBufferCount = 4, .mBufferSamples = 960 };
+
         WaterSoundUpdaterSettings makeWaterSoundUpdaterSettings()
         {
             WaterSoundUpdaterSettings settings;
@@ -359,6 +368,10 @@ namespace MWSound
             return mOutput->getStreamLoudness(sound);
         }
 
+        const auto voiceiter = mActiveVoiceStreams.find(ptr.mRef);
+        if (voiceiter != mActiveVoiceStreams.end())
+            return mOutput->getStreamLoudness(voiceiter->second.mStream.get());
+
         return 0.0f;
     }
 
@@ -409,6 +422,15 @@ namespace MWSound
             return false;
         }
 
+        // An attached voice stream runs whether or not anyone is talking into
+        // it, so the spurt flag decides this and not the stream. Answering yes
+        // for the life of the attachment would pin the mouth open, stop the
+        // actor blinking and suppress their idle dialogue for as long as the
+        // speaker is connected.
+        const auto voiceiter = mActiveVoiceStreams.find(ptr.mRef);
+        if (voiceiter != mActiveVoiceStreams.end())
+            return voiceiter->second.mSpeaking && mOutput->isStreamPlaying(voiceiter->second.mStream.get());
+
         return false;
     }
 
@@ -427,6 +449,121 @@ namespace MWSound
             mOutput->finishStream(snditer->second.mStream.get());
             mActiveSaySounds.erase(snditer);
         }
+    }
+
+    Stream* SoundManager::playVoiceStream(
+        const MWWorld::ConstPtr& ptr, DecoderPtr decoder, const VoiceStreamParams& params)
+    {
+        if (!mOutput->isInitialized() || decoder == nullptr)
+            return nullptr;
+
+        stopVoiceStream(ptr);
+
+        const float basevol = volumeFromType(Type::Voice);
+        StreamPtr sound = getStreamRef();
+
+        // NoScaling because this is a person talking: a mod that slows the
+        // simulation down must not pitch-shift them along with it. No
+        // RemoveAtDistance either, so that a speaker who wanders out of range
+        // fades and comes back rather than losing the attachment.
+        bool played;
+        if (params.mNonPositional)
+        {
+            sound->init([&] {
+                SoundParams sp;
+                sp.mBaseVolume = basevol;
+                sp.mFlags = PlayMode::NoEnvNoScaling | Type::Voice | Play_2D;
+                return sp;
+            }());
+            played = mOutput->streamSound(std::move(decoder), sound.get(), true, sVoiceStreamGeometry);
+        }
+        else
+        {
+            osg::Vec3f pos;
+            if (!ptr.isEmpty())
+                pos = MWBase::Environment::get().getWorld()->getActorHeadTransform(ptr).getTrans();
+
+            sound->init([&] {
+                SoundParams sp;
+                sp.mPos = pos;
+                sp.mBaseVolume = basevol;
+                sp.mMinDistance = params.mRefDistance;
+                sp.mMaxDistance = params.mMaxDistance;
+                sp.mMinGain = params.mMinGain;
+                sp.mRolloff = params.mRolloff;
+                sp.mFlags = PlayMode::NoScaling | Type::Voice | Play_3D;
+                return sp;
+            }());
+            // The loudness analyser is what lip sync reads, and it only exists
+            // if it is asked for here.
+            played = mOutput->streamSound3D(std::move(decoder), sound.get(), true, sVoiceStreamGeometry);
+        }
+
+        if (!played)
+            return nullptr;
+
+        Stream* result = sound.get();
+        mActiveVoiceStreams.emplace(ptr.mRef, VoiceStream{ ptr.mCell, std::move(sound) });
+        return result;
+    }
+
+    void SoundManager::stopVoiceStream(const MWWorld::ConstPtr& ptr)
+    {
+        const auto it = mActiveVoiceStreams.find(ptr.mRef);
+        if (it == mActiveVoiceStreams.end())
+            return;
+
+        // Finish the output side before the StreamPtr goes. Letting it go first
+        // returns the Stream to the pool while the output still holds the
+        // pointer, and the next caller to ask for one is handed it back.
+        mOutput->finishStream(it->second.mStream.get());
+        mActiveVoiceStreams.erase(it);
+    }
+
+    Stream* SoundManager::playVoiceTrack(std::uint32_t id, DecoderPtr decoder, const VoiceStreamParams& params)
+    {
+        if (!mOutput->isInitialized() || decoder == nullptr)
+            return nullptr;
+
+        stopVoiceTrack(id);
+
+        StreamPtr sound = getStreamRef();
+        sound->init([&] {
+            SoundParams sp;
+            sp.mBaseVolume = volumeFromType(Type::Voice);
+            sp.mFlags = PlayMode::NoEnvNoScaling | Type::Voice | Play_2D;
+            return sp;
+        }());
+
+        if (!mOutput->streamSound(std::move(decoder), sound.get(), true, sVoiceStreamGeometry))
+            return nullptr;
+
+        Stream* result = sound.get();
+        mActiveVoiceTracks.emplace(id, VoiceStream{ nullptr, std::move(sound) });
+        return result;
+    }
+
+    void SoundManager::stopVoiceTrack(std::uint32_t id)
+    {
+        const auto it = mActiveVoiceTracks.find(id);
+        if (it == mActiveVoiceTracks.end())
+            return;
+
+        mOutput->finishStream(it->second.mStream.get());
+        mActiveVoiceTracks.erase(it);
+    }
+
+    void SoundManager::setVoiceSpeaking(const MWWorld::ConstPtr& ptr, bool speaking)
+    {
+        const auto it = mActiveVoiceStreams.find(ptr.mRef);
+        if (it != mActiveVoiceStreams.end())
+            it->second.mSpeaking = speaking;
+    }
+
+    void SoundManager::wakeStreamThread()
+    {
+        if (mOutput->isInitialized())
+            mOutput->wakeStreamThread();
     }
 
     Stream* SoundManager::playTrack(const DecoderPtr& decoder, Type type)
@@ -709,6 +846,11 @@ namespace MWSound
         sayiter = mActiveSaySounds.find(ptr.mRef);
         if (sayiter != mActiveSaySounds.end())
             mOutput->finishStream(sayiter->second.mStream.get());
+
+        // Erased rather than left for updateSounds to reap, the way the say
+        // maps are: the voice loop never removes anything, so an entry left
+        // behind here would be a stream that can no longer play.
+        stopVoiceStream(ptr);
     }
 
     void SoundManager::stopSound(const MWWorld::CellStore* cell)
@@ -733,6 +875,12 @@ namespace MWSound
             if (ref != nullptr && ref != MWMechanics::getPlayer().mRef && sound.mCell == cell)
                 mOutput->finishStream(sound.mStream.get());
         }
+
+        // mActiveVoiceStreams is left out, which is the one place voice
+        // deliberately diverges from say. Unloading a cell is a fact about the
+        // world, not about the conversation: the person on the other end is
+        // still there and still talking, and the attachment has to outlive the
+        // loading door. The stream fades out on distance instead.
     }
 
     void SoundManager::fadeOutSound3D(const MWWorld::ConstPtr& ptr, const ESM::RefId& soundId, float duration)
@@ -1054,6 +1202,73 @@ namespace MWSound
             }
         }
 
+        for (auto& [ref, voice] : mActiveVoiceStreams)
+        {
+            MWWorld::ConstPtr ptr = ref;
+            Stream* sound = voice.mStream.get();
+            if (sound->getIs3D())
+            {
+                if (!ptr.isEmpty())
+                {
+                    // Position tracks the head; velocity is deliberately left
+                    // at zero. alDopplerFactor is global and cannot be turned
+                    // off for one source, so a velocity here would pitch-bend
+                    // speech every time the speaker turned round, and would
+                    // put a chirp on the first frame after a loading door,
+                    // where the previous position is in the cell that has just
+                    // gone away.
+                    sound->setPosition(MWBase::Environment::get().getWorld()->getActorHeadTransform(ptr).getTrans());
+                }
+
+                // Fades out of range rather than dying there: the attachment
+                // has to survive the excursion and be audible again on the way
+                // back.
+                cull3DSound(sound);
+            }
+
+            sound->updateFade(duration);
+
+            if (!mOutput->isStreamPlaying(sound))
+            {
+                // The exact failure this milestone exists to find, and it is
+                // permanent: one short read from the decoder finishes a stream
+                // for good. The entry stays so that the dead attachment is
+                // visible rather than quietly cleaned up.
+                if (!voice.mReportedStopped)
+                {
+                    voice.mReportedStopped = true;
+                    Log(Debug::Warning) << "Voice stream for "
+                                        << (ptr.isEmpty() ? ESM::RefId() : ptr.getCellRef().getRefId())
+                                        << " stopped playing and will not resume";
+                }
+                continue;
+            }
+
+            mOutput->updateStream(sound);
+        }
+
+        for (auto& [id, voice] : mActiveVoiceTracks)
+        {
+            Stream* sound = voice.mStream.get();
+            sound->updateFade(duration);
+
+            if (!mOutput->isStreamPlaying(sound))
+            {
+                // Kept, not reaped, for the same reason as the attached case:
+                // a stream that has stopped is not coming back, and the useful
+                // thing is to say so once rather than to tidy it away.
+                if (!voice.mReportedStopped)
+                {
+                    voice.mReportedStopped = true;
+                    Log(Debug::Warning)
+                        << "Voice track for speaker " << id << " stopped playing and will not resume";
+                }
+                continue;
+            }
+
+            mOutput->updateStream(sound);
+        }
+
         TrackList::iterator trkiter = mActiveTracks.begin();
         while (trkiter != mActiveTracks.end())
         {
@@ -1150,6 +1365,18 @@ namespace MWSound
             sound->setBaseVolume(volumeFromType(sound->getPlayType()));
             mOutput->updateStream(sound);
         }
+        for (VoiceStreamMap::value_type& snd : mActiveVoiceStreams)
+        {
+            Stream* sound = snd.second.mStream.get();
+            sound->setBaseVolume(volumeFromType(sound->getPlayType()));
+            mOutput->updateStream(sound);
+        }
+        for (VoiceTrackMap::value_type& snd : mActiveVoiceTracks)
+        {
+            Stream* sound = snd.second.mStream.get();
+            sound->setBaseVolume(volumeFromType(sound->getPlayType()));
+            mOutput->updateStream(sound);
+        }
         for (const StreamPtr& sound : mActiveTracks)
         {
             sound->setBaseVolume(volumeFromType(sound->getPlayType()));
@@ -1190,6 +1417,9 @@ namespace MWSound
             it->second.mCell = updated.mCell;
 
         if (const auto it = mActiveSaySounds.find(old.mRef); it != mActiveSaySounds.end())
+            it->second.mCell = updated.mCell;
+
+        if (const auto it = mActiveVoiceStreams.find(old.mRef); it != mActiveVoiceStreams.end())
             it->second.mCell = updated.mCell;
     }
 
@@ -1305,6 +1535,21 @@ namespace MWSound
         for (SaySoundMap::value_type& snd : mActiveSaySounds)
             mOutput->finishStream(snd.second.mStream.get());
         mActiveSaySounds.clear();
+
+        // A new game or a save load takes every attachment with it, so whatever
+        // owns the speakers has to attach them again rather than assume its
+        // handles survived. The bump is the only way it can find out: the
+        // Stream objects go back to the pool still readable, and this is the
+        // one path that empties these maps without the owner having asked.
+        ++mClearGeneration;
+
+        for (VoiceStreamMap::value_type& snd : mActiveVoiceStreams)
+            mOutput->finishStream(snd.second.mStream.get());
+        mActiveVoiceStreams.clear();
+
+        for (VoiceTrackMap::value_type& snd : mActiveVoiceTracks)
+            mOutput->finishStream(snd.second.mStream.get());
+        mActiveVoiceTracks.clear();
 
         for (StreamPtr& sound : mActiveTracks)
             mOutput->finishStream(sound.get());

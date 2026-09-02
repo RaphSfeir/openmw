@@ -21,6 +21,15 @@ namespace OpenMW
         addOption("help", "print help message");
         addOption("version", "print version information and quit");
 
+        // Multiplayer voice chat brings the first microphone code into the
+        // engine, and a mic that cannot be opened is indistinguishable from a
+        // mod that is not transmitting. This records a few seconds to a wav and
+        // quits, so capture can be diagnosed without a session running.
+        addOption("voip-mic-test",
+            bpo::value<std::string>()->implicit_value(""),
+            "record a few seconds from a capture device to voicetest.wav and quit "
+            "(optionally takes a device name; empty means the system default)");
+
         addOption("data",
             bpo::value<Files::MaybeQuotedPathContainer>()
                 ->default_value(Files::MaybeQuotedPathContainer(), "data")

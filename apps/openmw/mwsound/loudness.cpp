@@ -49,7 +49,10 @@ namespace MWSound
             float rms = 0; // root mean square
             if (samplesAdded > 0)
                 rms = std::sqrt(sum / samplesAdded);
-            mSamples.push_back(rms);
+            if (mSamples.empty())
+                mSamples.assign(sMaxSamples, 0.0f);
+            mSamples[mTotalSamples % sMaxSamples] = rms;
+            ++mTotalSamples;
             ++segment;
         }
 
@@ -58,11 +61,18 @@ namespace MWSound
 
     float Sound_Loudness::getLoudnessAtTime(float sec) const
     {
-        if (mSamplesPerSec <= 0.0f || mSamples.empty() || sec < 0.0f)
+        if (mSamplesPerSec <= 0.0f || mTotalSamples == 0 || sec < 0.0f)
             return 0.0f;
 
-        size_t index = std::min(static_cast<size_t>(sec * mSamplesPerSec), mSamples.size() - 1);
-        return mSamples[index];
+        size_t index = std::min(static_cast<size_t>(sec * mSamplesPerSec), mTotalSamples - 1);
+
+        // Asking for something older than the history holds. Silence is the
+        // honest answer; the modulo on its own would return whatever a minute
+        // of audio later happens to have written over it.
+        if (mTotalSamples > sMaxSamples && index < mTotalSamples - sMaxSamples)
+            return 0.0f;
+
+        return mSamples[index % sMaxSamples];
     }
 
 }

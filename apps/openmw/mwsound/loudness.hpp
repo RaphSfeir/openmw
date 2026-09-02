@@ -16,8 +16,20 @@ namespace MWSound
         ChannelConfig mChannelConfig;
         SampleType mSampleType;
 
-        // Loudness sample info
+        // A minute of history, and no more. Every consumer reads at the current
+        // playback offset, which trails the write head by the output queue and
+        // nothing else, so older values are never asked for - but a multiplayer
+        // voice stream is attached for as long as the speaker is present and is
+        // analysed even while they are silent, so an unbounded history would
+        // accrue for the whole session with nothing to reclaim it. A minute is
+        // also longer than any spoken line in the game, which is why the vanilla
+        // callers cannot tell the difference.
+        static constexpr std::size_t sMaxSamples = 1200;
+
+        // Written at mTotalSamples % sMaxSamples. The count itself does not
+        // wrap: it is what says whether an index has been evicted.
         std::vector<float> mSamples;
+        std::size_t mTotalSamples = 0;
 
         std::deque<char> mQueue;
 

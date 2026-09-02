@@ -28,6 +28,25 @@ namespace MWSound
         Env_Underwater
     };
 
+    // How much audio a stream keeps queued ahead of the listener. The defaults
+    // are what every stream used before voice existed, and music and movie
+    // audio still want them: a deep queue that survives a stalled decoder.
+    //
+    // Voice wants the opposite. The queue is dead latency between a word being
+    // spoken and being heard, and the default geometry buries speech under
+    // three quarters of a second of it.
+    //
+    // mBufferSamples exists because the seconds form cannot express a whole
+    // number of codec frames: the size is computed by truncating a float, and
+    // 0.02f * 48000 comes out at 959, which is not a 20 ms Opus frame. A
+    // non-zero sample count is used verbatim instead.
+    struct StreamGeometry
+    {
+        unsigned int mBufferCount = 6;
+        float mBufferSeconds = 0.125f;
+        unsigned int mBufferSamples = 0;
+    };
+
     using HrtfMode = Settings::HrtfMode;
 
     class SoundOutput
@@ -49,9 +68,18 @@ namespace MWSound
         virtual bool isSoundPlaying(Sound* sound) = 0;
         virtual void updateSound(Sound* sound) = 0;
 
-        virtual bool streamSound(DecoderPtr decoder, Stream* sound, bool getLoudnessData = false) = 0;
-        virtual bool streamSound3D(DecoderPtr decoder, Stream* sound, bool getLoudnessData) = 0;
+        virtual bool streamSound(
+            DecoderPtr decoder, Stream* sound, bool getLoudnessData = false, const StreamGeometry& geom = {})
+            = 0;
+        virtual bool streamSound3D(
+            DecoderPtr decoder, Stream* sound, bool getLoudnessData, const StreamGeometry& geom = {})
+            = 0;
         virtual void finishStream(Stream* sound) = 0;
+
+        // Cuts short the stream thread's idle wait so a stream that has just
+        // been handed new data does not sit through the rest of it. Voice runs
+        // on buffers far shorter than that wait.
+        virtual void wakeStreamThread() = 0;
         virtual double getStreamDelay(Stream* sound) = 0;
         virtual float getStreamOffset(Stream* sound) = 0;
         virtual float getStreamLoudness(Stream* sound) = 0;

@@ -24,6 +24,7 @@
 
 #include <components/lua/serialization.hpp>
 #include <components/net/session.hpp>
+#include <components/voip/relay.hpp>
 
 #include "config.hpp"
 #include "shim.hpp"
@@ -55,6 +56,19 @@ int main(int argc, char* argv[])
     std::signal(SIGTERM, onSignal);
 
     Net::Session session;
+
+    // Voice is relayed in C++, beside the Lua rather than through it: the
+    // frames are opaque bytes at 50 per second per speaker, and pushing them
+    // through deserialise-dispatch-reserialise would cost the arbiter real time
+    // for no decision it is qualified to make. It reads the eight byte header,
+    // stamps the true origin over whatever the sender claimed, and forwards.
+    // Nothing about Opus is linked into this binary and nothing needs to be.
+    Voip::Relay relay;
+    relay.setSink([&session](std::uint32_t peer, const unsigned char* data, std::size_t size) {
+        session.send(peer, Voip::sVoiceChannel, Net::Delivery::Unsequenced,
+            std::string(reinterpret_cast<const char*>(data), size));
+    });
+
     sol::state lua;
     lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::math,
         sol::lib::os, sol::lib::package, sol::lib::coroutine, sol::lib::debug);
@@ -67,7 +81,7 @@ int main(int argc, char* argv[])
 
     try
     {
-        MPServer::installShim(lua, session, config);
+        MPServer::installShim(lua, session, relay, config);
     }
     catch (const std::exception& e)
     {
@@ -125,6 +139,12 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // Claimed before the first pump, so no voice packet is ever queued for the
+    // Lua side even during the handshake.
+    session.setChannelHandler(Voip::sVoiceChannel, [&relay](std::uint32_t peer, std::string_view data) {
+        relay.onPacket(peer, data, std::chrono::steady_clock::now());
+    });
+
     // requestHost is a REQUEST: it is executed by the next pump(), not here. So the
     // bind has to be pumped and then CHECKED before anything is announced. Printing
     // "listening on port N" first was a lie the one time it mattered — with the port
@@ -157,6 +177,13 @@ int main(int argc, char* argv[])
         // Networking first, so the Lua tick reacts to what arrived rather than
         // to what arrived last time round.
         session.pump();
+
+        // Not housekeeping: with capability defaulting open until the 'voi'
+        // announce exists, the transport's peer list is the only thing that
+        // tells the relay who its audience is. Skipping this drops every packet
+        // for want of a route, as well as leaking per-peer state for anybody
+        // who has left.
+        relay.tick(session.getPeers(), start);
 
         sol::protected_function_result result = update(dt);
         if (!result.valid())

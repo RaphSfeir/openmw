@@ -283,8 +283,9 @@ namespace MWSound
     private:
         ALuint mSource;
 
-        std::array<ALuint, 6> mBuffers;
+        std::vector<ALuint> mBuffers;
         ALint mCurrentBufIdx;
+        StreamGeometry mGeometry;
 
         ALenum mFormat;
         ALsizei mSampleRate;
@@ -304,7 +305,7 @@ namespace MWSound
         friend class OpenALOutput;
 
     public:
-        OpenAL_SoundStream(ALuint src, DecoderPtr decoder);
+        OpenAL_SoundStream(ALuint src, DecoderPtr decoder, const StreamGeometry& geom = {});
         ~OpenAL_SoundStream();
 
         bool init(bool getLoudnessData = false);
@@ -328,6 +329,7 @@ namespace MWSound
         std::vector<OpenAL_SoundStream*> mStreams;
 
         std::atomic<bool> mQuitNow;
+        std::atomic<bool> mWakeRequested{ false };
         std::mutex mMutex;
         std::condition_variable mCondVar;
         std::thread mThread;
@@ -361,8 +363,24 @@ namespace MWSound
                         ++iter;
                 }
 
-                mCondVar.wait_for(lock, std::chrono::milliseconds(50));
+                mCondVar.wait_for(lock, std::chrono::milliseconds(50),
+                    [this] { return mQuitNow.load() || mWakeRequested.exchange(false); });
             }
+        }
+
+        // Called from whichever thread just gave a stream something to play.
+        //
+        // It deliberately does not take mMutex, though that is the usual way to
+        // close the lost-wakeup window: mMutex is held across the entire decode
+        // pass over every stream, music included, so waiting for it here would
+        // hand an unbounded stall to a caller that has no business waiting on
+        // ffmpeg. A notification that lands mid-pass leaves the flag set and is
+        // picked up when the wait is next entered, so the cost of losing the
+        // race is the 50 ms it would have been anyway, never a hang.
+        void wake()
+        {
+            mWakeRequested.store(true);
+            mCondVar.notify_all();
         }
 
         void add(OpenAL_SoundStream* stream)
@@ -371,7 +389,12 @@ namespace MWSound
             if (std::find(mStreams.begin(), mStreams.end(), stream) == mStreams.end())
             {
                 mStreams.push_back(stream);
-                mCondVar.notify_all();
+                // Through wake(), not a bare notify: the wait has a predicate
+                // now, so a notification that does not set the flag is ignored
+                // and the new stream would wait out the rest of the idle period
+                // before its first buffer was queued. wake() takes no lock, so
+                // calling it while holding this one is safe.
+                wake();
             }
         }
 
@@ -451,9 +474,10 @@ namespace MWSound
         }
     };
 
-    OpenAL_SoundStream::OpenAL_SoundStream(ALuint src, DecoderPtr decoder)
+    OpenAL_SoundStream::OpenAL_SoundStream(ALuint src, DecoderPtr decoder, const StreamGeometry& geom)
         : mSource(src)
         , mCurrentBufIdx(0)
+        , mGeometry(geom)
         , mFormat(AL_NONE)
         , mSampleRate(0)
         , mBufferSize(0)
@@ -463,7 +487,7 @@ namespace MWSound
         , mLoudnessAnalyzer(nullptr)
         , mIsFinished(true)
     {
-        mBuffers.fill(0);
+        mBuffers.assign(mGeometry.mBufferCount != 0 ? mGeometry.mBufferCount : 1, 0);
     }
 
     OpenAL_SoundStream::~OpenAL_SoundStream()
@@ -510,7 +534,8 @@ namespace MWSound
         }
 
         mFrameSize = static_cast<ALuint>(framesToBytes(1, chans, type));
-        mBufferSize = static_cast<ALuint>(sBufferLength * mSampleRate);
+        mBufferSize = mGeometry.mBufferSamples != 0 ? mGeometry.mBufferSamples
+                                                    : static_cast<ALuint>(mGeometry.mBufferSeconds * mSampleRate);
         mBufferSize *= mFrameSize;
 
         if (getLoudnessData)
@@ -1112,6 +1137,12 @@ namespace MWSound
         alSourcef(source, AL_REFERENCE_DISTANCE, 1.0f);
         alSourcef(source, AL_MAX_DISTANCE, 1000.0f);
         alSourcef(source, AL_ROLLOFF_FACTOR, 0.0f);
+        // Cleared with the rest of the 3D state this function exists to
+        // neutralise. Sources are pooled, and one that last carried a voice
+        // stream comes back with a gain floor still on it; inherited by a 2D
+        // sound, that floor would keep it audible after the volume it was
+        // given had already silenced it.
+        alSourcef(source, AL_MIN_GAIN, 0.0f);
         alSourcei(source, AL_SOURCE_RELATIVE, AL_TRUE);
         alSourcei(source, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
         if (AL.SOFT_source_spatialize)
@@ -1145,11 +1176,22 @@ namespace MWSound
     }
 
     void OpenALOutput::initCommon3D(ALuint source, const osg::Vec3f& pos, const osg::Vec3f& vel, ALfloat mindist,
-        ALfloat maxdist, ALfloat gain, ALfloat pitch, bool loop, bool useenv)
+        ALfloat maxdist, ALfloat rolloff, ALfloat mingain, ALfloat gain, ALfloat pitch, bool loop, bool useenv)
     {
         alSourcef(source, AL_REFERENCE_DISTANCE, mindist);
         alSourcef(source, AL_MAX_DISTANCE, maxdist);
-        alSourcef(source, AL_ROLLOFF_FACTOR, 1.0f);
+        alSourcef(source, AL_ROLLOFF_FACTOR, rolloff);
+        // A floor under the attenuated gain, for sources that must stay
+        // present at a distance where the curve alone would have removed them.
+        // Zero for everything the engine played before this existed.
+        //
+        // Scaled by the source's own gain, and kept that way on every update.
+        // OpenAL clamps the FINAL gain, so an unscaled floor would also outrank
+        // the source's volume: a voice fading out of range would stop at the
+        // floor instead of reaching silence, and setting the gain to zero would
+        // not mute it at all. The floor is meant to resist distance, not the
+        // volume the game asked for.
+        alSourcef(source, AL_MIN_GAIN, mingain * gain);
         alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
         alSourcei(source, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
         if (AL.SOFT_source_spatialize)
@@ -1185,7 +1227,7 @@ namespace MWSound
     }
 
     void OpenALOutput::updateCommon(ALuint source, const osg::Vec3f& pos, const osg::Vec3f& vel, ALfloat maxdist,
-        ALfloat gain, ALfloat pitch, bool useenv)
+        ALfloat mingain, ALfloat gain, ALfloat pitch, bool useenv)
     {
         if (useenv && mListenerEnv == Env_Underwater && !mWaterFilter)
         {
@@ -1193,6 +1235,10 @@ namespace MWSound
             pitch *= 0.7f;
         }
 
+        // Re-scaled every update for the reason given in initCommon3D: a fixed
+        // floor would outrank the fade that carries a source out of range, and
+        // would make a gain of zero inaudible-but-not-silent.
+        alSourcef(source, AL_MIN_GAIN, mingain * gain);
         alSourcef(source, AL_GAIN, gain);
         alSourcef(source, AL_PITCH, pitch);
         alSourcefv(source, AL_POSITION, pos.ptr());
@@ -1251,8 +1297,8 @@ namespace MWSound
         source = mFreeSources.front();
 
         initCommon3D(source, sound->getPosition(), sound->getVelocity(), sound->getMinDistance(),
-            sound->getMaxDistance(), sound->getRealVolume(), getTimeScaledPitch(sound), sound->getIsLooping(),
-            sound->getUseEnv());
+            sound->getMaxDistance(), sound->getRolloff(), sound->getMinGain(), sound->getRealVolume(),
+            getTimeScaledPitch(sound), sound->getIsLooping(), sound->getUseEnv());
         alSourcei(source, AL_BUFFER, GET_PTRID(data));
         alSourcef(source, AL_SEC_OFFSET, offset);
         if (getALError() != AL_NO_ERROR)
@@ -1316,11 +1362,12 @@ namespace MWSound
         ALuint source = GET_PTRID(sound->mHandle);
 
         updateCommon(source, sound->getPosition(), sound->getVelocity(), sound->getMaxDistance(),
-            sound->getRealVolume(), getTimeScaledPitch(sound), sound->getUseEnv());
+            sound->getMinGain(), sound->getRealVolume(), getTimeScaledPitch(sound), sound->getUseEnv());
         getALError();
     }
 
-    bool OpenALOutput::streamSound(DecoderPtr decoder, Stream* sound, bool getLoudnessData)
+    bool OpenALOutput::streamSound(
+        DecoderPtr decoder, Stream* sound, bool getLoudnessData, const StreamGeometry& geom)
     {
         if (mFreeSources.empty())
         {
@@ -1337,7 +1384,7 @@ namespace MWSound
         if (getALError() != AL_NO_ERROR)
             return false;
 
-        OpenAL_SoundStream* stream = new OpenAL_SoundStream(source, std::move(decoder));
+        OpenAL_SoundStream* stream = new OpenAL_SoundStream(source, std::move(decoder), geom);
         if (!stream->init(getLoudnessData))
         {
             delete stream;
@@ -1351,7 +1398,8 @@ namespace MWSound
         return true;
     }
 
-    bool OpenALOutput::streamSound3D(DecoderPtr decoder, Stream* sound, bool getLoudnessData)
+    bool OpenALOutput::streamSound3D(
+        DecoderPtr decoder, Stream* sound, bool getLoudnessData, const StreamGeometry& geom)
     {
         if (mFreeSources.empty())
         {
@@ -1364,11 +1412,12 @@ namespace MWSound
             Log(Debug::Warning) << "Warning: cannot loop stream \"" << decoder->getName() << "\"";
 
         initCommon3D(source, sound->getPosition(), sound->getVelocity(), sound->getMinDistance(),
-            sound->getMaxDistance(), sound->getRealVolume(), getTimeScaledPitch(sound), false, sound->getUseEnv());
+            sound->getMaxDistance(), sound->getRolloff(), sound->getMinGain(), sound->getRealVolume(),
+            getTimeScaledPitch(sound), false, sound->getUseEnv());
         if (getALError() != AL_NO_ERROR)
             return false;
 
-        OpenAL_SoundStream* stream = new OpenAL_SoundStream(source, std::move(decoder));
+        OpenAL_SoundStream* stream = new OpenAL_SoundStream(source, std::move(decoder), geom);
         if (!stream->init(getLoudnessData))
         {
             delete stream;
@@ -1380,6 +1429,11 @@ namespace MWSound
         sound->mHandle = stream;
         mActiveStreams.push_back(sound);
         return true;
+    }
+
+    void OpenALOutput::wakeStreamThread()
+    {
+        mStreamThread->wake();
     }
 
     void OpenALOutput::finishStream(Stream* sound)
@@ -1447,7 +1501,7 @@ namespace MWSound
         ALuint source = stream->mSource;
 
         updateCommon(source, sound->getPosition(), sound->getVelocity(), sound->getMaxDistance(),
-            sound->getRealVolume(), getTimeScaledPitch(sound), sound->getUseEnv());
+            sound->getMinGain(), sound->getRealVolume(), getTimeScaledPitch(sound), sound->getUseEnv());
         getALError();
     }
 

@@ -67,6 +67,7 @@
 
 #include "mwsound/constants.hpp"
 #include "mwsound/soundmanagerimp.hpp"
+#include "mwsound/voipmanager.hpp"
 
 #include "mwworld/class.hpp"
 #include "mwworld/datetimemanager.hpp"
@@ -234,6 +235,18 @@ bool OMW::Engine::frame(unsigned frameNumber, float frametime)
             // Should be called after input manager update and before any change to the game world.
             // It applies to the game world queued changes from the previous frame.
             mLuaManager->synchronizedUpdate();
+        }
+
+        {
+            ScopedProfile<UserStatsType::Sound> profile(frameStart, frameNumber, *timer, *stats);
+            // After the Lua pump, so a player script's onKeyPress has already
+            // decided this frame's push-to-talk state and it costs no extra
+            // frame; before anything touches the world, because this is where a
+            // voice stream is attached to an actor. Control only - the audio
+            // itself never comes through here, which is what lets it survive a
+            // loading screen, when this function does not run at all.
+            if (mVoipManager)
+                mVoipManager->update(frametime);
         }
 
         // update game state
@@ -417,6 +430,11 @@ OMW::Engine::~Engine()
         mScreenCaptureOperation = nullptr;
     }
     mScreenCaptureHandler = nullptr;
+
+    // First, and not by accident: this joins the capture thread and detaches the
+    // voice stream, both of which reach into the sound manager that goes at the
+    // bottom of this list.
+    mVoipManager = nullptr;
 
     mMechanicsManager = nullptr;
     mDialogueManager = nullptr;
@@ -845,6 +863,17 @@ void OMW::Engine::prepareEngine()
     // Create sound system
     mSoundManager = std::make_unique<MWSound::SoundManager>(mVFS.get(), mUseSound);
     mEnvironment.setSoundManager(*mSoundManager);
+
+    // Voice needs the concrete sound manager, so it cannot be built before this
+    // point, and the Lua packages built in initPostLoad reach it through the
+    // environment, so it must exist before that.
+    mVoipManager = std::make_unique<MWSound::VoipManager>(*mSoundManager);
+    mEnvironment.setVoipManager(*mVoipManager);
+    // The transport is a by-value member of the Lua manager, built well above
+    // this line, and destroyed after this object - see the ordering note in the
+    // destructor - so the borrowed pointer cannot outlive what it points at.
+    // This is also where the voice channel's handler is claimed.
+    mVoipManager->setSession(&mLuaManager->netSession());
 
     // Create the world
     mWorld = std::make_unique<MWWorld::World>(

@@ -8,6 +8,11 @@ namespace Net
     class Session;
 }
 
+namespace Voip
+{
+    class Relay;
+}
+
 namespace MPServer
 {
     struct Config;
@@ -21,7 +26,7 @@ namespace MPServer
     // was rewritten not to need one. A stub that silently invented data would
     // hide exactly the dependencies M8.0 removed, so they return nothing rather
     // than something plausible.
-    void installShim(sol::state& lua, Net::Session& session, const Config& config);
+    void installShim(sol::state& lua, Net::Session& session, Voip::Relay& relay, const Config& config);
 }
 
 #endif // OPENMW_MP_SERVER_SHIM_H

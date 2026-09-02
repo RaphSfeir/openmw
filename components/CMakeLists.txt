@@ -71,6 +71,10 @@ add_component_dir (net
     session
     )
 
+add_component_dir (voip
+    jitterbuffer wire relay
+    )
+
 add_component_dir (settings
     categories
     categories/camera

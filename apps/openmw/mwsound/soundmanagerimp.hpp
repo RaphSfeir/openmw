@@ -17,6 +17,7 @@
 #include "regionsoundselector.hpp"
 #include "soundbuffer.hpp"
 #include "type.hpp"
+#include "voicestream.hpp"
 #include "watersoundupdater.hpp"
 
 namespace VFS
@@ -84,6 +85,45 @@ namespace MWSound
         typedef std::map<const MWWorld::LiveCellRefBase*, SaySound> SaySoundMap;
         SaySoundMap mSaySoundsQueue;
         SaySoundMap mActiveSaySounds;
+
+        // Multiplayer voice, kept apart from the say maps on purpose. Sharing
+        // them would put a live voice stream under one-stream-per-actor
+        // eviction, make sayActive true for as long as a speaker is attached
+        // (which stops blinking and idle dialogue), and hand cell unloading the
+        // power to end a conversation.
+        struct VoiceStream
+        {
+            const MWWorld::CellStore* mCell;
+            StreamPtr mStream;
+            // An attachment is persistent and mostly silent, so the head
+            // animation has to be driven by whether the speaker is mid spurt,
+            // never by whether the stream exists.
+            bool mSpeaking = false;
+            // A stopped stream is permanent and is reported once rather than
+            // every frame; the log is the point of it, so the entry stays.
+            bool mReportedStopped = false;
+        };
+
+        typedef std::map<const MWWorld::LiveCellRefBase*, VoiceStream> VoiceStreamMap;
+        VoiceStreamMap mActiveVoiceStreams;
+
+        // Voice from somebody who has no body on this machine. Keyed by the
+        // speaker's own id rather than by a reference, because there is nothing
+        // to reference: every such speaker would otherwise key on the same null
+        // and the second one to arrive would evict the first. Always 2D - there
+        // is no position to place it at until the mod says which puppet the
+        // speaker is.
+        typedef std::map<std::uint32_t, VoiceStream> VoiceTrackMap;
+        VoiceTrackMap mActiveVoiceTracks;
+
+        // Bumped every time clear() empties the two maps above. It exists
+        // because that removal is otherwise undetectable from outside: the
+        // Stream objects go back to a pool that recycles rather than frees, so
+        // a borrowed handle stays readable and starts reporting whatever sound
+        // the pool hands it to next, and the player reference a stream was
+        // keyed by is a by-value member of MWWorld::Player and never changes
+        // address. Nothing else about the clear is observable.
+        std::uint64_t mClearGeneration = 0;
 
         typedef std::vector<StreamPtr> TrackList;
         TrackList mActiveTracks;
@@ -206,6 +246,39 @@ namespace MWSound
         ///< Check the currently playing say sound for this actor
         /// and get an average loudness value (scale [0,1]) at the current time position.
         /// If the actor is not saying anything, returns 0.
+
+        Stream* playVoiceStream(
+            const MWWorld::ConstPtr& reference, DecoderPtr decoder, const VoiceStreamParams& params);
+        ///< Attach a live voice stream to an actor's head, replacing any stream already attached to it.
+        ///< Deliberately absent from MWBase::SoundManager: only the VoIP code needs it, and the abstract
+        ///< interface exists so the rest of the game can reach sound without knowing what MWSound is.
+        ///< \return the stream, usable with getTrackTimeDelay to measure playback latency, or nullptr.
+
+        void stopVoiceStream(const MWWorld::ConstPtr& reference);
+        ///< Detach the voice stream from an actor. Invalidates the Stream* from playVoiceStream.
+
+        Stream* playVoiceTrack(std::uint32_t id, DecoderPtr decoder, const VoiceStreamParams& params);
+        ///< A 2D voice stream for a speaker with no body here, keyed by speaker id.
+        /// Uses the same short buffer geometry as playVoiceStream, so it does not
+        /// inherit the deep queue that music and movie audio want.
+
+        void stopVoiceTrack(std::uint32_t id);
+        ///< Invalidates the Stream* from playVoiceTrack.
+
+        std::uint64_t clearGeneration() const { return mClearGeneration; }
+        ///< Changes whenever clear() has thrown every voice attachment away, which a holder of a
+        ///< Stream* from playVoiceStream/playVoiceTrack cannot otherwise notice. Compare it once per
+        ///< frame and drop the handles when it moves. Main thread only, like the maps it describes.
+        ///< Deliberately absent from MWBase::SoundManager for the same reason as the two calls above.
+
+        void setVoiceSpeaking(const MWWorld::ConstPtr& reference, bool speaking);
+        ///< Whether the attached speaker is mid talk spurt. This, and not the attachment, is what
+        ///< makes sayActive true and therefore what drives the mouth.
+
+        void wakeStreamThread();
+        ///< Cut short the streaming thread's idle wait, for a decoder that has just been handed data
+        ///< it should not sit on. Safe to call from the thread packets arrive on; the output side takes
+        ///< no lock. Reachable only through here because SoundOutput is private to this class.
 
         Stream* playTrack(const DecoderPtr& decoder, Type type) override;
         ///< Play a 2D audio track, using a custom decoder

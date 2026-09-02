@@ -41,6 +41,40 @@ namespace MWLua
             return true;
         }
 
+        // The four names the dedicated server's shim exposes on openmw.network,
+        // present here as honest no-ops so that the SAME server-side module runs
+        // unchanged on a listen host. Without them the identical script throws
+        // on exactly one of the two paths, which is the worst way to find out.
+        //
+        // They are stubs because the game client does not run a relay in M2:
+        // voice goes to the server, the server fans it out, and a listen host is
+        // a client that also hosts but forwards nothing. M3 brings the 'voi'
+        // control plane, which is what these calls are policy FOR - capability
+        // announce and routing - and the listen-host relay is wired up with it,
+        // at which point every one of these grows a body. Until then a module
+        // asking for voice policy on a listen host gets "no, and here is
+        // nothing", never an error.
+        void addVoipFunctions(sol::table& api)
+        {
+            api["voipEnable"] = [](bool) {};
+            api["voipSetCapable"] = [](std::uint32_t, bool) { return false; };
+            api["voipRoute"] = [](std::uint32_t, sol::optional<sol::table>) { return false; };
+            api["voipStats"] = [](sol::this_state s) {
+                sol::state_view lua(s);
+                sol::table result(lua, sol::create);
+                // Shaped like the shim's answer rather than empty, so a caller
+                // can read result.enabled and result.forwarded without knowing
+                // which end it is talking to.
+                result["enabled"] = false;
+                result["tracked"] = 0;
+                result["capable"] = 0;
+                result["routed"] = 0;
+                result["received"] = 0.0;
+                result["forwarded"] = 0.0;
+                return result;
+            };
+        }
+
         void addControlFunctions(sol::table& api, Net::Session* session)
         {
             api["host"] = [session](sol::optional<int> port, sol::optional<int> maxPeers) {
@@ -73,6 +107,8 @@ namespace MWLua
                     state["error"] = error;
                 return state;
             };
+
+            addVoipFunctions(api);
         }
     }
 

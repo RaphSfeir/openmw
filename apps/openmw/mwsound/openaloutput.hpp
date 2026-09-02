@@ -66,10 +66,10 @@ namespace MWSound
 
         void initCommon2D(ALuint source, const osg::Vec3f& pos, ALfloat gain, ALfloat pitch, bool loop, bool useenv);
         void initCommon3D(ALuint source, const osg::Vec3f& pos, const osg::Vec3f& vel, ALfloat mindist, ALfloat maxdist,
-            ALfloat gain, ALfloat pitch, bool loop, bool useenv);
+            ALfloat rolloff, ALfloat mingain, ALfloat gain, ALfloat pitch, bool loop, bool useenv);
 
-        void updateCommon(ALuint source, const osg::Vec3f& pos, const osg::Vec3f& vel, ALfloat maxdist, ALfloat gain,
-            ALfloat pitch, bool useenv);
+        void updateCommon(ALuint source, const osg::Vec3f& pos, const osg::Vec3f& vel, ALfloat maxdist,
+            ALfloat mingain, ALfloat gain, ALfloat pitch, bool useenv);
 
         float getTimeScaledPitch(SoundBase* sound);
 
@@ -97,8 +97,11 @@ namespace MWSound
         bool isSoundPlaying(Sound* sound) override;
         void updateSound(Sound* sound) override;
 
-        bool streamSound(DecoderPtr decoder, Stream* sound, bool getLoudnessData = false) override;
-        bool streamSound3D(DecoderPtr decoder, Stream* sound, bool getLoudnessData) override;
+        bool streamSound(DecoderPtr decoder, Stream* sound, bool getLoudnessData = false,
+            const StreamGeometry& geom = {}) override;
+        bool streamSound3D(
+            DecoderPtr decoder, Stream* sound, bool getLoudnessData, const StreamGeometry& geom = {}) override;
+        void wakeStreamThread() override;
         void finishStream(Stream* sound) override;
         double getStreamDelay(Stream* sound) override;
         float getStreamOffset(Stream* sound) override;
