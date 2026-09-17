@@ -101,8 +101,16 @@ namespace MWLua
             osg::Vec3f mPosition;
             LuaUtil::TransformQ mRotation;
         };
+        // MP: an mwscript Enable/Disable, reported instead of applied while a
+        // net session is active.
+        struct OnStateRequest
+        {
+            ESM::RefNum mObject;
+            bool mEnable;
+        };
         using Event = std::variant<OnActive, OnInactive, OnConsume, OnActivate, OnUseItem, OnNewExterior, OnTeleported,
-            OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnJailTimeServed, OnDropped, OnPlaced>;
+            OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnJailTimeServed, OnDropped, OnPlaced,
+            OnStateRequest>;
 
         void clear() { mQueue.clear(); }
         void addToQueue(Event e) { mQueue.push_back(std::move(e)); }

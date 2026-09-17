@@ -609,6 +609,12 @@ namespace MWLua
             EngineEvents::OnPlaced{ getId(object), getId(actor), position, LuaUtil::asTransform(rotation) });
     }
 
+    void LuaManager::objectStateRequest(const MWWorld::Ptr& object, bool enable)
+    {
+        MWBase::Environment::get().getWorldModel()->registerPtr(object);
+        mEngineEvents.addToQueue(EngineEvents::OnStateRequest{ getId(object), enable });
+    }
+
     void LuaManager::animationTextKey(const MWWorld::Ptr& actor, const std::string& key)
     {
         auto pos = key.find(": ");

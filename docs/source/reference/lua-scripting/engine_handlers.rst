@@ -74,8 +74,16 @@ Engine handler is a function defined by a script, that can be called by the engi
     - | An object was placed by a player actor. This is triggered when
       | dropping an item and placing it on a surface. ``rotation`` is a
       | ``util.Transform``.
-      | The position and rotation parameters describe the object's location before 
+      | The position and rotation parameters describe the object's location before
       | being snapped to the ground.
+  * - onObjectStateRequest(object, enable)
+    - | Multiplayer only. An mwscript asked to enable (``enable == true``) or
+      | disable this object, and the engine did NOT apply it because a net
+      | session is active: every client runs the same scripts on its own copy
+      | of the world, so the change is arbitrated once by the session instead
+      | of each machine deciding for itself. Whoever handles this owns the
+      | decision and must do the applying (``object.enabled = ...``). Outside
+      | a session the opcodes behave as vanilla and this never fires.
 
 **Only for local scripts**
 

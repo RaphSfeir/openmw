@@ -20,7 +20,8 @@ namespace MWLua
         {
             registerEngineHandlers({ &mObjectActiveHandlers, &mActorActiveHandlers, &mItemActiveHandlers,
                 &mNewGameHandlers, &mPlayerAddedHandlers, &mOnActivateHandlers, &mOnUseItemHandlers,
-                &mOnNewExteriorHandlers, &mOnDroppedHandlers, &mOnPlacedHandlers, &mOnProjectileHit });
+                &mOnNewExteriorHandlers, &mOnDroppedHandlers, &mOnPlacedHandlers, &mOnProjectileHit,
+                &mOnObjectStateRequestHandlers });
         }
 
         void newGameStarted() { callEngineHandlers(mNewGameHandlers); }
@@ -46,6 +47,13 @@ namespace MWLua
         {
             callEngineHandlers(mOnUseItemHandlers, obj, actor, force);
         }
+        // MP: an mwscript asked to enable/disable this object and the opcode
+        // did NOT apply it, because a session is active. Whoever handles this
+        // owns the decision and must do the applying.
+        void onObjectStateRequest(const GObject& obj, bool enable)
+        {
+            callEngineHandlers(mOnObjectStateRequestHandlers, obj, enable);
+        }
         void onNewExterior(const GCell& cell) { callEngineHandlers(mOnNewExteriorHandlers, cell); }
         void onProjectileHit(const sol::table& projectile, const sol::table& hitResult)
         {
@@ -61,6 +69,7 @@ namespace MWLua
         EngineHandlerList mOnActivateHandlers{ "onActivate" };
         EngineHandlerList mOnDroppedHandlers{ "onDropped" };
         EngineHandlerList mOnPlacedHandlers{ "onPlaced" };
+        EngineHandlerList mOnObjectStateRequestHandlers{ "onObjectStateRequest" };
         EngineHandlerList mOnUseItemHandlers{ "_onUseItem" };
         EngineHandlerList mOnNewExteriorHandlers{ "onNewExterior" };
         EngineHandlerList mOnProjectileHit{ "_onProjectileHit" };

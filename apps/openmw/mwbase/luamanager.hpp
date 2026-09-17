@@ -83,6 +83,12 @@ namespace MWBase
             const osg::Quat& rotation)
             = 0;
         virtual void objectActivated(const MWWorld::Ptr& object, const MWWorld::Ptr& actor) = 0;
+        // MP: an mwscript asked for an object to be enabled or disabled. In a
+        // net session the opcode does NOT apply it (see mwscript
+        // miscextensions OpEnable/OpDisable); it becomes a request the session
+        // arbitrates, so every machine ends up with the same answer instead of
+        // each client's own copy of the script deciding for itself.
+        virtual void objectStateRequest(const MWWorld::Ptr& object, bool enable) = 0;
         virtual void useItem(const MWWorld::Ptr& object, const MWWorld::Ptr& actor, bool force) = 0;
         virtual void animationTextKey(const MWWorld::Ptr& actor, const std::string& key) = 0;
         virtual void playAnimation(const MWWorld::Ptr& object, const std::string& groupname,

@@ -237,6 +237,32 @@ namespace MWScript
             }
         };
 
+        // MULTIPLAYER: AN ENABLE IS A REQUEST, NOT AN ACT.
+        //
+        // Every client runs the same mwscripts on its own copy of the world, so
+        // a quest script that hides a bridge hides it on one machine and the
+        // party disagrees about what is standing there. Worse, each machine
+        // re-evaluates its own scripts every frame, so anything that merely
+        // OBSERVED the flag and announced it would fight the local script in a
+        // loop.
+        //
+        // So the opcode does not apply the change while a session is live: it
+        // reports the intent, the session arbitrates it once, and the answer is
+        // applied on every machine including this one. This is what TES3MP does
+        // (its comment calls it a "change (major)" in the same two opcodes);
+        // the difference here is the session gate, because our client loads
+        // cells for several seconds before it connects and the scripts running
+        // in that window must still take effect.
+        template <bool Enable>
+        static bool mpDeferState(const MWWorld::Ptr& ptr)
+        {
+            auto lua = MWBase::Environment::get().getLuaManager();
+            if (!lua->isNetSessionActive())
+                return false;
+            lua->objectStateRequest(ptr, Enable);
+            return true;
+        }
+
         template <class R>
         class OpEnable : public Interpreter::Opcode0
         {
@@ -244,6 +270,8 @@ namespace MWScript
             void execute(Interpreter::Runtime& runtime) override
             {
                 MWWorld::Ptr ptr = R()(runtime);
+                if (mpDeferState<true>(ptr))
+                    return;
                 MWBase::Environment::get().getWorld()->enable(ptr);
             }
         };
@@ -274,6 +302,8 @@ namespace MWScript
                 {
                     ptr = R()(runtime);
                 }
+                if (mpDeferState<false>(ptr))
+                    return;
                 MWBase::Environment::get().getWorld()->disable(ptr);
             }
         };
