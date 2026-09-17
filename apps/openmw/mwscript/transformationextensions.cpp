@@ -488,6 +488,13 @@ namespace MWScript
                 bool cellActive = MWBase::Environment::get().getWorldScene()->isCellActive(*ptr.getCell());
                 ptr.getClass().adjustPosition(ptr, isPlayer || !cellActive);
                 MWBase::Environment::get().getLuaManager()->objectTeleported(ptr);
+                // MULTIPLAYER: Position and PositionCell are placements, not
+                // animation -- a quest putting an object somewhere, including
+                // in another cell entirely. Reported AFTER the move, on the
+                // Ptr the move returned, so the pose carries the destination
+                // cell. Actors are still excluded inside mpNoteTransform:
+                // their positions belong to the actor stream.
+                mpNoteTransform(ptr);
             }
         };
 
@@ -543,6 +550,13 @@ namespace MWScript
                 bool cellActive = MWBase::Environment::get().getWorldScene()->isCellActive(*ptr.getCell());
                 ptr.getClass().adjustPosition(ptr, isPlayer || !cellActive);
                 MWBase::Environment::get().getLuaManager()->objectTeleported(ptr);
+                // MULTIPLAYER: Position and PositionCell are placements, not
+                // animation -- a quest putting an object somewhere, including
+                // in another cell entirely. Reported AFTER the move, on the
+                // Ptr the move returned, so the pose carries the destination
+                // cell. Actors are still excluded inside mpNoteTransform:
+                // their positions belong to the actor stream.
+                mpNoteTransform(ptr);
             }
         };
 
