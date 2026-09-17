@@ -106,6 +106,7 @@ namespace MWLua
         void objectPlaced(const MWWorld::Ptr& object, const MWWorld::Ptr& actor, const osg::Vec3f& position,
             const osg::Quat& rotation) override;
         void objectStateRequest(const MWWorld::Ptr& object, bool enable) override;
+        void objectTransformed(const MWWorld::Ptr& object) override;
         void animationTextKey(const MWWorld::Ptr& actor, const std::string& key) override;
         void playAnimation(const MWWorld::Ptr& actor, const std::string& groupname,
             const MWRender::AnimPriority& priority, int blendMask, bool autodisable, float speedmult,

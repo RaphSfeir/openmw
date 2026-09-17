@@ -89,6 +89,11 @@ namespace MWBase
         // arbitrates, so every machine ends up with the same answer instead of
         // each client's own copy of the script deciding for itself.
         virtual void objectStateRequest(const MWWorld::Ptr& object, bool enable) = 0;
+        // MP: a script moved, rotated or rescaled a non-actor object. Unlike
+        // enable/disable the engine DOES apply it first -- these are absolute
+        // values that converge, and suppressing them would show the object in
+        // the wrong place for a round trip -- so this reports the RESULT.
+        virtual void objectTransformed(const MWWorld::Ptr& object) = 0;
         virtual void useItem(const MWWorld::Ptr& object, const MWWorld::Ptr& actor, bool force) = 0;
         virtual void animationTextKey(const MWWorld::Ptr& actor, const std::string& key) = 0;
         virtual void playAnimation(const MWWorld::Ptr& object, const std::string& groupname,

@@ -76,6 +76,13 @@ Engine handler is a function defined by a script, that can be called by the engi
       | ``util.Transform``.
       | The position and rotation parameters describe the object's location before
       | being snapped to the ground.
+  * - onObjectTransform(object)
+    - | Multiplayer only. A script moved, rotated or rescaled this non-actor
+      | object and the engine HAS applied it -- unlike enable/disable, which is
+      | deferred, because a transform is an absolute value that converges. The
+      | handler's job is to tell the other machines. Rotate, RotateWorld, Move
+      | and MoveWorld are deliberately not reported: those animate lifts and
+      | spinning doors every frame.
   * - onObjectStateRequest(object, enable)
     - | Multiplayer only. An mwscript asked to enable (``enable == true``) or
       | disable this object, and the engine did NOT apply it because a net

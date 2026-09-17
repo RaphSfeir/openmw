@@ -21,7 +21,7 @@ namespace MWLua
             registerEngineHandlers({ &mObjectActiveHandlers, &mActorActiveHandlers, &mItemActiveHandlers,
                 &mNewGameHandlers, &mPlayerAddedHandlers, &mOnActivateHandlers, &mOnUseItemHandlers,
                 &mOnNewExteriorHandlers, &mOnDroppedHandlers, &mOnPlacedHandlers, &mOnProjectileHit,
-                &mOnObjectStateRequestHandlers });
+                &mOnObjectStateRequestHandlers, &mOnObjectTransformHandlers });
         }
 
         void newGameStarted() { callEngineHandlers(mNewGameHandlers); }
@@ -54,6 +54,9 @@ namespace MWLua
         {
             callEngineHandlers(mOnObjectStateRequestHandlers, obj, enable);
         }
+        // MP: a script moved/rotated/rescaled this object and the engine HAS
+        // applied it; the handler's job is to tell everyone else.
+        void onObjectTransform(const GObject& obj) { callEngineHandlers(mOnObjectTransformHandlers, obj); }
         void onNewExterior(const GCell& cell) { callEngineHandlers(mOnNewExteriorHandlers, cell); }
         void onProjectileHit(const sol::table& projectile, const sol::table& hitResult)
         {
@@ -70,6 +73,7 @@ namespace MWLua
         EngineHandlerList mOnDroppedHandlers{ "onDropped" };
         EngineHandlerList mOnPlacedHandlers{ "onPlaced" };
         EngineHandlerList mOnObjectStateRequestHandlers{ "onObjectStateRequest" };
+        EngineHandlerList mOnObjectTransformHandlers{ "onObjectTransform" };
         EngineHandlerList mOnUseItemHandlers{ "_onUseItem" };
         EngineHandlerList mOnNewExteriorHandlers{ "onNewExterior" };
         EngineHandlerList mOnProjectileHit{ "_onProjectileHit" };

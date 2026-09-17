@@ -108,6 +108,34 @@ namespace MWScript
             }
         };
 
+        // MULTIPLAYER: A SCRIPT THAT MOVES OR RESCALES SOMETHING SAYS SO.
+        //
+        // Every client runs the same scripts on its own copy of the world, so a
+        // quest that slides a wall aside slides it on one machine only. Unlike
+        // Enable/Disable (which is DEFERRED, because the flag is a decision two
+        // machines can disagree about) the engine applies these first and the
+        // result is then announced: a transform is an absolute value that
+        // converges, and deferring it would leave the object visibly in the old
+        // place for a whole round trip.
+        //
+        // Actors are excluded: their positions belong to the actor stream,
+        // which already has an authority per cell, and reporting them here
+        // would fight it.
+        //
+        // Deliberately NOT hooked: Rotate/RotateWorld/Move/MoveWorld. Those are
+        // how Morrowind animates lifts, spinning doors and the like -- called
+        // every frame while something is in motion -- and announcing each step
+        // would flood the session to describe an animation every machine is
+        // already playing for itself.
+        static void mpNoteTransform(const MWWorld::Ptr& ptr)
+        {
+            if (ptr.isEmpty() || ptr.getClass().isActor())
+                return;
+            auto lua = MWBase::Environment::get().getLuaManager();
+            if (lua->isNetSessionActive())
+                lua->objectTransformed(ptr);
+        }
+
         template <class R>
         class OpSetScale : public Interpreter::Opcode0
         {
@@ -120,6 +148,7 @@ namespace MWScript
                 runtime.pop();
 
                 MWBase::Environment::get().getWorld()->scaleObject(ptr, scale);
+                mpNoteTransform(ptr);
             }
         };
 
@@ -147,6 +176,7 @@ namespace MWScript
 
                 // add the parameter to the object's scale.
                 MWBase::Environment::get().getWorld()->scaleObject(ptr, ptr.getCellRef().getScale() + scale);
+                mpNoteTransform(ptr);
             }
         };
 
@@ -187,6 +217,7 @@ namespace MWScript
                 else if (axis == "w")
                     MWBase::Environment::get().getWorld()->rotateObject(
                         ptr, osg::Vec3f(ax, ay, angle), MWBase::RotationFlag_none);
+                mpNoteTransform(ptr);
             }
         };
 
@@ -335,6 +366,7 @@ namespace MWScript
 
                 dynamic_cast<MWScript::InterpreterContext&>(runtime.getContext())
                     .updatePtr(ptr, MWBase::Environment::get().getWorld()->moveObjectBy(ptr, newPos - curPos, true));
+                mpNoteTransform(ptr);
             }
         };
 

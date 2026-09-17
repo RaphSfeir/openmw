@@ -108,9 +108,15 @@ namespace MWLua
             ESM::RefNum mObject;
             bool mEnable;
         };
+        // MP: a script's move/rotate/rescale of a non-actor object, reported
+        // after the engine has applied it.
+        struct OnTransformed
+        {
+            ESM::RefNum mObject;
+        };
         using Event = std::variant<OnActive, OnInactive, OnConsume, OnActivate, OnUseItem, OnNewExterior, OnTeleported,
             OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnJailTimeServed, OnDropped, OnPlaced,
-            OnStateRequest>;
+            OnStateRequest, OnTransformed>;
 
         void clear() { mQueue.clear(); }
         void addToQueue(Event e) { mQueue.push_back(std::move(e)); }
