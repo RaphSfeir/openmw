@@ -149,8 +149,17 @@ namespace MWLua
             = [](MWScriptVariables& s) { return s.mRef.getLocals().getSize(s.mRef.mId); };
         mwscriptVars[sol::meta_function::index] = sol::overload(
             [](MWScriptVariables& s, std::string_view var) -> sol::optional<double> {
-                if (s.mRef.getLocals().hasVar(s.mRef.mId, var))
-                    return s.mRef.getLocals().getVarAsDouble(s.mRef.mId, Misc::StringUtils::lowerCase(var));
+                // LOWERCASED FOR THE EXISTENCE CHECK TOO. mwscript identifiers
+                // are case-insensitive and Compiler::Locals indexes them
+                // lowercased, so hasVar with the caller's spelling failed for
+                // every mixed-case name -- while the two lines that actually
+                // read and write it lowercase correctly. The result was that
+                // `script.variables.doOnce` read as nil but assigning to it
+                // worked, which is a trap rather than a limitation. Cost a
+                // debugging round on a real mod variable spelled doOnce.
+                const std::string lower = Misc::StringUtils::lowerCase(var);
+                if (s.mRef.getLocals().hasVar(s.mRef.mId, lower))
+                    return s.mRef.getLocals().getVarAsDouble(s.mRef.mId, lower);
                 else
                     return sol::nullopt;
             },

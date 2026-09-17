@@ -265,8 +265,22 @@ namespace MWWorld
         // Pause tags stay in the formula: the mod relies on them for its own
         // one-frame pulse, and outside a session everything behaves as upstream.
         const bool netSession = MWBase::Environment::get().getLuaManager()->isNetSessionActive();
-        mPaused = !mPausedTags.empty() || wm->isInteractiveMessageBoxActive()
+        // AND THE SAME NOW GOES FOR AN INTERACTIVE MESSAGE BOX, for the same
+        // reason and with a sharper edge. One player reading a box froze their
+        // world, so their puppet stopped dead for everyone else. Worse, mods
+        // throw these on the first frame of a new game -- a load-order warning,
+        // a "thanks for installing" -- and a frozen clock there is a client
+        // that can never finish joining, because the join waits on the clock.
+        // Unattended, nobody ever clicks it. That cost the modded test harness
+        // two weeks of silence.
+        //
+        // The box still appears and still waits to be dismissed; it just stops
+        // holding the world still while it does. Outside a session everything
+        // behaves as upstream.
+        mPaused = !mPausedTags.empty()
             || stateManager->getState() == MWBase::StateManager::State_NoGame
-            || (!netSession && (wm->isConsoleMode() || wm->isPostProcessorHudVisible()));
+            || (!netSession
+                && (wm->isInteractiveMessageBoxActive() || wm->isConsoleMode()
+                    || wm->isPostProcessorHudVisible()));
     }
 }
