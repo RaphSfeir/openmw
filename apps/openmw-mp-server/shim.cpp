@@ -181,16 +181,33 @@ namespace MPServer
             sol::table api(lua, sol::create);
             const std::filesystem::path dir = config.mDataDir / "mp-campaigns";
 
-            auto fileFor = [dir](std::string_view name) {
-                if (name.empty() || name.size() > 64)
-                    throw std::runtime_error("campaign: invalid name");
+            // The same rule as the client's mwlua binding (campaignbindings.cpp):
+            // TES3MP names its per-cell files by the cell description itself and
+            // only refuses what an OS refuses, and the campaign's cell shards do
+            // the same. Admits what Morrowind cell names use -- spaces, commas,
+            // apostrophes, periods, parentheses -- and rejects the
+            // filesystem-illegal set, control characters, path separators, a
+            // leading/trailing space or period, and "..".
+            auto checkName = [](std::string_view name) {
+                if (name.empty() || name.size() > 200)
+                    throw std::runtime_error("campaign: invalid name (empty or longer than 200)");
+                if (name.front() == ' ' || name.front() == '.' || name.back() == ' ' || name.back() == '.')
+                    throw std::runtime_error("campaign: invalid name (leading/trailing space or period)");
+                if (name.find("..") != std::string_view::npos)
+                    throw std::runtime_error("campaign: invalid name (contains '..')");
                 for (const char c : name)
                 {
-                    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-                        || c == '-' || c == '_' || c == '@';
-                    if (!ok)
-                        throw std::runtime_error("campaign: invalid name (a-z, A-Z, 0-9, '-', '_', '@' only)");
+                    const unsigned char uc = static_cast<unsigned char>(c);
+                    const bool alnum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+                    const bool punct = c == '-' || c == '_' || c == '@' || c == ' ' || c == '.' || c == ','
+                        || c == '\'' || c == '(' || c == ')';
+                    if (uc < 0x20 || uc == 0x7f || (!alnum && !punct))
+                        throw std::runtime_error(
+                            "campaign: invalid name (letters, digits, space, - _ @ . , ' ( ) only)");
                 }
+            };
+            auto fileFor = [dir, checkName](std::string_view name) {
+                checkName(name);
                 return dir / (std::string(name) + ".bin");
             };
 
@@ -227,14 +244,8 @@ namespace MPServer
             // client's binding in mwlua has the same pair, and the first version
             // of this shipped to only that one, which is why the server answered
             // "this build has no campaign.writeJson binding".
-            auto jsonFileFor = [dir](std::string_view name) {
-                for (const char c : name)
-                {
-                    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-                        || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '@';
-                    if (!ok)
-                        throw std::runtime_error("campaign: invalid name (a-z, A-Z, 0-9, '-', '_', '@' only)");
-                }
+            auto jsonFileFor = [dir, checkName](std::string_view name) {
+                checkName(name);
                 return dir / (std::string(name) + ".json");
             };
             api["writeJson"] = [jsonFileFor](std::string_view name, const sol::object& data) {

@@ -24,15 +24,32 @@ namespace MWLua
     {
         // Names are constrained rather than sanitized: a rejected name is a bug
         // the caller should hear about, not a silently renamed file.
+        // TES3MP names its per-cell files by the cell description itself
+        // ("Balmora, Guild of Mages.json", "-3, -2.json") and only refuses what
+        // an OS refuses. The campaign's cell shards do the same, so the rule
+        // admits the characters Morrowind cell names actually use -- spaces,
+        // commas, apostrophes, periods, parentheses -- and rejects the
+        // filesystem-illegal set, control characters, path separators, a
+        // leading/trailing space or period (Windows) and "..". Still
+        // constrained rather than sanitized: a rejected name is a bug the
+        // caller hears about.
         bool isValidName(std::string_view name)
         {
-            if (name.empty() || name.size() > 64)
+            if (name.empty() || name.size() > 200)
+                return false;
+            if (name.front() == ' ' || name.front() == '.' || name.back() == ' ' || name.back() == '.')
+                return false;
+            if (name.find("..") != std::string_view::npos)
                 return false;
             for (const char c : name)
             {
-                const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-                    || c == '-' || c == '_' || c == '@';
-                if (!ok)
+                const unsigned char uc = static_cast<unsigned char>(c);
+                if (uc < 0x20 || uc == 0x7f)
+                    return false;
+                const bool alnum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+                const bool punct = c == '-' || c == '_' || c == '@' || c == ' ' || c == '.' || c == ','
+                    || c == '\'' || c == '(' || c == ')';
+                if (!alnum && !punct)
                     return false;
             }
             return true;

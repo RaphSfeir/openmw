@@ -3,6 +3,7 @@
 #include <components/l10n/manager.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -256,7 +257,16 @@ namespace MWWorld
     {
         auto stateManager = MWBase::Environment::get().getStateManager();
         auto wm = MWBase::Environment::get().getWindowManager();
-        mPaused = !mPausedTags.empty() || wm->isConsoleMode() || wm->isPostProcessorHudVisible()
-            || wm->isInteractiveMessageBoxActive() || stateManager->getState() == MWBase::StateManager::State_NoGame;
+        // Multiplayer: the console is not a GuiMode, so the Lua side cannot veto
+        // its pause the way the mod vetoes the 'ui' pause tag (it returns false to
+        // the Pause event while a session is active). Opening the console froze
+        // that player's world -- their puppet stopped for everyone else -- so in
+        // a session the console and the post-processor HUD no longer pause.
+        // Pause tags stay in the formula: the mod relies on them for its own
+        // one-frame pulse, and outside a session everything behaves as upstream.
+        const bool netSession = MWBase::Environment::get().getLuaManager()->isNetSessionActive();
+        mPaused = !mPausedTags.empty() || wm->isInteractiveMessageBoxActive()
+            || stateManager->getState() == MWBase::StateManager::State_NoGame
+            || (!netSession && (wm->isConsoleMode() || wm->isPostProcessorHudVisible()));
     }
 }
