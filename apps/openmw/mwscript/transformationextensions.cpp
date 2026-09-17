@@ -131,6 +131,17 @@ namespace MWScript
         {
             if (ptr.isEmpty() || ptr.getClass().isActor())
                 return;
+            // NOT SOMETHING IN A BAG. An object inside a ContainerStore has no
+            // cell, so the session could not file the pose under one anyway --
+            // but the real reason is sharper: LuaManager::objectTransformed
+            // begins with WorldModel::registerPtr, and for a ref whose RefNum
+            // is unset that MINTS one and writes it into the CellRef.
+            // ContainerStore unsets RefNums deliberately, because they are only
+            // meaningful in the original cell. So rescaling a carried item
+            // would give it a permanent generated RefNum and register an
+            // inventory item in the world model.
+            if (ptr.getContainerStore() != nullptr || !ptr.isInCell())
+                return;
             auto lua = MWBase::Environment::get().getLuaManager();
             if (lua->isNetSessionActive())
                 lua->objectTransformed(ptr);
@@ -364,9 +375,16 @@ namespace MWScript
                     return;
                 }
 
-                dynamic_cast<MWScript::InterpreterContext&>(runtime.getContext())
-                    .updatePtr(ptr, MWBase::Environment::get().getWorld()->moveObjectBy(ptr, newPos - curPos, true));
-                mpNoteTransform(ptr);
+                // REPORT THE PTR THE MOVE RETURNED, not the one we started
+                // with. moveObjectBy can hand back a different Ptr -- that is
+                // exactly why updatePtr exists two lines up -- and crossing an
+                // exterior cell boundary is when it does. Reporting the old one
+                // filed the pose under the cell the object had just left, and
+                // registerPtr then wrote that stale Ptr over the correct entry
+                // in the world model's registry.
+                MWWorld::Ptr moved = MWBase::Environment::get().getWorld()->moveObjectBy(ptr, newPos - curPos, true);
+                dynamic_cast<MWScript::InterpreterContext&>(runtime.getContext()).updatePtr(ptr, moved);
+                mpNoteTransform(moved);
             }
         };
 
@@ -732,10 +750,17 @@ namespace MWScript
                 MWBase::Environment::get().getWorld()->rotateObject(
                     ptr, ptr.getCellRef().getPosition().asRotationVec3());
 
-                dynamic_cast<MWScript::InterpreterContext&>(runtime.getContext())
-                    .updatePtr(ptr,
-                        MWBase::Environment::get().getWorld()->moveObject(
-                            ptr, ptr.getCellRef().getPosition().asVec3()));
+                // SetAtStart PUTS IT BACK, and that is a transform like any
+                // other -- the one that UNDOES the ones above. Leaving it
+                // unhooked was worse than leaving it unsynced: a script that
+                // moved something and later reset it left the moved pose
+                // recorded in the campaign forever, so the object jumped back
+                // to the moved position on every restart while the script that
+                // would have reset it had already run.
+                MWWorld::Ptr moved = MWBase::Environment::get().getWorld()->moveObject(
+                    ptr, ptr.getCellRef().getPosition().asVec3());
+                dynamic_cast<MWScript::InterpreterContext&>(runtime.getContext()).updatePtr(ptr, moved);
+                mpNoteTransform(moved);
             }
         };
 
