@@ -114,6 +114,27 @@ namespace MWClass
         const MWWorld::ESMStore& store = *MWBase::Environment::get().getESMStore();
         MWBase::World* world = MWBase::Environment::get().getWorld();
 
+        // mp: ALREADY CLEARED BY THE PARTY, so do not roll it at all.
+        //
+        // HERE, and not anywhere later, because this is the only point at which
+        // a spawn can be PREVENTED rather than undone: two lines down the
+        // creature exists, and deleting it afterwards is a creature that
+        // flickered into the cave on somebody's screen. It is also the only
+        // check that works before a cell has ever loaded, which is what a
+        // returning player needs.
+        //
+        // The session tells us which spawners are cleared (by content RefNum,
+        // the only stable half of the pair -- the creature it spawned is a
+        // runtime object). mSpawn is left false, so this machine treats the
+        // point as already rolled and CellStore::respawn's own clock governs
+        // when it may come back, exactly as it would have.
+        const ESM::RefNum refNum = ptr.getCellRef().getRefNum();
+        if (refNum.hasContentFile() && world->isLevelledSpawnCleared(refNum))
+        {
+            customData.mSpawn = false;
+            return;
+        }
+
         // mp: THE levelled-spawn desync. Vanilla rolls this spawn point off the
         // shared world PRNG, whose stream POSITION diverges between two machines
         // within seconds of loading the same world (different cell-load order,
@@ -133,7 +154,7 @@ namespace MWClass
         // Lua-side arbitration that still backs all of this up.
         std::optional<uint64_t> spawnSeed;
         std::optional<int> spawnLevel;
-        const ESM::RefNum refNum = ptr.getCellRef().getRefNum();
+        // refNum is declared above, at the cleared-spawn check.
         if (const auto& rule = world->getLevelledSpawnRule(); rule && rule->mLevel > 0 && refNum.hasContentFile())
         {
             uint64_t s = MWMechanics::mixSeed(rule->mSeed);

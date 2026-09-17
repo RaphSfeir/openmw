@@ -259,6 +259,42 @@ namespace MWLua
             world->setLevelledSpawnRule(r);
         };
 
+        // mp: THE SPAWN POINTS THE PARTY HAS CLEARED, so a cave they emptied is
+        // still empty when they come back.
+        //
+        // The creature a spawner produces is a runtime object with no portable
+        // identity, so its death cannot go in the campaign; the spawner is a
+        // content reference and can. The session therefore remembers cleared
+        // SPAWNERS and pushes the whole set here, and
+        // CreatureLevList::insertObjectRendering consults it before it rolls --
+        // the one place a spawn can be prevented rather than undone.
+        //
+        // Takes a list of { contentFile = <int>, index = <int> } because that is
+        // what a RefNum is, and because a Lua number cannot hold the pair: a
+        // modlist past 255 plugins overflows the packed form the engine itself
+        // refuses to compute for the same reason.
+        //
+        // WHOLE SET, REPLACING: idempotent, so re-sending is free and a refilled
+        // cave needs no separate retraction. An empty list is the vanilla state.
+        api["setClearedLevelledSpawns"] = [](sol::optional<sol::table> list) {
+            MWBase::World* world = MWBase::Environment::get().getWorld();
+            std::vector<ESM::RefNum> cleared;
+            if (list)
+            {
+                cleared.reserve(list->size());
+                for (const auto& [_, v] : *list)
+                {
+                    sol::table e = v.as<sol::table>();
+                    ESM::RefNum n;
+                    n.mContentFile = e.get_or("contentFile", -1);
+                    n.mIndex = static_cast<uint32_t>(e.get_or("index", 0));
+                    if (n.hasContentFile())
+                        cleared.push_back(n);
+                }
+            }
+            world->setClearedLevelledSpawns(std::move(cleared));
+        };
+
         // Creates a new record in the world database.
         api["createRecord"] = sol::overload(
             [lua = context.mLua](const ESM::Activator& activator) -> const ESM::Activator* {

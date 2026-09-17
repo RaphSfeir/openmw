@@ -142,6 +142,25 @@ namespace MWBase
         virtual void setLevelledSpawnRule(std::optional<LevelledSpawnRule> rule) = 0;
         virtual const std::optional<LevelledSpawnRule>& getLevelledSpawnRule() const = 0;
 
+        // mp: SPAWN POINTS THE PARTY HAS ALREADY CLEARED.
+        //
+        // The creature a spawner produces is a runtime object, so it has no
+        // portable identity and its death cannot be written to the campaign.
+        // The SPAWNER can: it is a content reference. So the session remembers
+        // which spawners are cleared, by content RefNum, and hands the set to
+        // every client; insertObjectRendering consults it BEFORE it rolls,
+        // which is the one point where a spawn can be prevented rather than
+        // undone. Without this, every cave the party cleared is repopulated on
+        // the next restart -- a solo savegame keeps the engine's own mSpawn
+        // flag, and a campaign has no savegame to keep it in.
+        //
+        // Deliberately not mSpawn itself: that flag is paired with
+        // mSpawnedActor, a RefNum of a runtime object, which cannot survive a
+        // restart. Restoring the flag without its creature makes
+        // CreatureLevList::respawn re-arm it on the next cell load.
+        virtual void setClearedLevelledSpawns(std::vector<ESM::RefNum> cleared) = 0;
+        virtual bool isLevelledSpawnCleared(const ESM::RefNum& spawner) const = 0;
+
         virtual void startNewGame(bool bypass) = 0;
         ///< \param bypass Bypass regular game start.
 

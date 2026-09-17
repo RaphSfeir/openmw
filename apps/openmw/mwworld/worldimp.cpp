@@ -517,6 +517,26 @@ namespace MWWorld
         return mLevelledSpawnRule;
     }
 
+    void World::setClearedLevelledSpawns(std::vector<ESM::RefNum> cleared)
+    {
+        // REPLACED WHOLE, not merged. The session owns this set; sending it
+        // entire makes the message idempotent, so a repeat is harmless and a
+        // release (a cave that has refilled) needs no separate "forget this
+        // one" road. The set is small by construction: an entry expires a few
+        // game days after the kill, exactly as vanilla's corpse-respawn delay
+        // does, so it holds what the party has cleared RECENTLY rather than
+        // everything they have ever killed.
+        mClearedLevelledSpawns.clear();
+        mClearedLevelledSpawns.insert(cleared.begin(), cleared.end());
+    }
+
+    bool World::isLevelledSpawnCleared(const ESM::RefNum& spawner) const
+    {
+        if (mClearedLevelledSpawns.empty())
+            return false;
+        return mClearedLevelledSpawns.find(spawner) != mClearedLevelledSpawns.end();
+    }
+
     void World::useDeathCamera()
     {
         mRendering->getCamera()->setMode(MWRender::Camera::Mode::ThirdPerson);

@@ -137,6 +137,9 @@ namespace MWWorld
 
         uint32_t mRandomSeed{};
         std::optional<LevelledSpawnRule> mLevelledSpawnRule; // mp: nullopt = vanilla rolls
+        // mp: spawn points the party has cleared, by content RefNum. Pushed whole
+        // by the session; consulted before a roll. See MWBase::World.
+        std::set<ESM::RefNum> mClearedLevelledSpawns;
         bool mIdsRebuilt{};
 
         // not implemented
@@ -215,6 +218,8 @@ namespace MWWorld
         // session.
         void setLevelledSpawnRule(std::optional<LevelledSpawnRule> rule) override;
         const std::optional<LevelledSpawnRule>& getLevelledSpawnRule() const override;
+        void setClearedLevelledSpawns(std::vector<ESM::RefNum> cleared) override;
+        bool isLevelledSpawnCleared(const ESM::RefNum& spawner) const override;
 
         void startNewGame(bool bypass) override;
         ///< \param bypass Bypass regular game start.
