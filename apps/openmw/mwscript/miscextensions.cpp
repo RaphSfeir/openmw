@@ -259,6 +259,56 @@ namespace MWScript
             auto lua = MWBase::Environment::get().getLuaManager();
             if (!lua->isNetSessionActive())
                 return false;
+            // ALREADY IN THAT STATE: nothing to ask, and nothing to do.
+            //
+            // Morrowind's scripts re-assert Disable on hidden things every
+            // frame -- that is simply how they keep something hidden -- and
+            // each of those calls was being turned into an engine event, a
+            // queue entry and a Lua dispatch before the session recognised it
+            // as a repeat and dropped it. MEASURED, with the 554-file Total
+            // Overhaul list loaded outdoors in Balmora: about 7000 requests a
+            // minute, of which zero were new decisions. Vanilla Morrowind alone
+            // produces two in 78 seconds, which is why this only showed up once
+            // the modded harness worked.
+            //
+            // Returning false here is not "apply it anyway": the opcode falls
+            // through to world->enable/disable, which for an object already in
+            // that state is a no-op, exactly as it is in vanilla. So the
+            // session sees the same sequence of genuine CHANGES it saw before,
+            // just without the repeats. This is TES3MP's mLastCommunicatedState
+            // idea, read off the object instead of stored beside it -- we can,
+            // because the session applies its decisions locally, so the
+            // object's own flag IS what this machine last agreed to.
+            // SWALLOWED, not passed on. Returning false here would fall through
+            // to World::disable, whose first act is reference.getRefData(), and
+            // Ptr::getRefData() is `assert(mRef); return mRef->mData` -- the
+            // assert compiles out in release, so that is a null dereference
+            // where the old code raised a catchable error. Unreachable today,
+            // but it is the only crash-shaped edge this guard could introduce.
+            if (ptr.isEmpty())
+                return true;
+            // A CARRIED ITEM IS NOT A WORLD OBJECT. World::disable is
+            // explicitly a no-op for something in a container, and the request
+            // would be worse than useless: objectStateRequest begins with
+            // registerPtr, which MINTS a RefNum for a ref whose own is unset --
+            // which is exactly what ContainerStore does to them -- and the Lua
+            // side then throws "Objects in containers can't be disabled" a
+            // frame later. Same guard mpNoteTransform carries, same reason.
+            if (ptr.getContainerStore() != nullptr || !ptr.isInCell())
+                return true;
+            // ALREADY IN THAT STATE: nothing to decide. Falling through means
+            // world->enable/disable, which for an object already in that state
+            // is a no-op exactly as in vanilla, so the session still sees every
+            // genuine CHANGE -- just not the per-frame repeats.
+            //
+            // THIS IS ONLY SOUND BECAUSE THE WORLD FOLLOWS THE LEDGER, and that
+            // had to be made true first: objstate.setState and objstate.seed
+            // now retry an apply they could not do, and objstate reconciles
+            // known-vs-world on a slow tick. Before those, a machine that had
+            // drifted was repaired only by the very torrent this suppresses,
+            // and the drift would have become permanent and silent.
+            if (ptr.getRefData().isEnabled() == Enable)
+                return false;
             lua->objectStateRequest(ptr, Enable);
             return true;
         }
