@@ -19,6 +19,8 @@
 
 #include "../mwrender/renderingmanager.hpp"
 
+#include "../mwmechanics/aisequence.hpp"
+#include "../mwmechanics/aiwander.hpp"
 #include "../mwmechanics/creaturestats.hpp"
 
 #include "../mwbase/environment.hpp"
@@ -121,6 +123,25 @@ namespace MWLua
                 auto& stats = cls.getCreatureStats(ptr);
                 stats.land(false);
                 stats.setTeleported(true);
+                // mp: AND LET ITS WANDER FOLLOW IT.
+                //
+                // A wander package fixes its home point on its first tick and
+                // roams within a radius of it forever, so an actor moved here
+                // deliberately treats its new spot as somewhere to walk back
+                // FROM. A multiplayer session restores where actors were
+                // standing between sessions, and without this every restored
+                // NPC walked home over the next few seconds.
+                //
+                // Only on this path, which is the deliberate one. The engine's
+                // own placement keeps the plugin's anchor, and onActorActive
+                // cannot be used instead: the event is queued while the cell
+                // loads and dispatched a frame later, by which time mechanics
+                // has already ticked the actor once and the anchor is set.
+                for (const auto& package : stats.getAiSequence())
+                {
+                    if (package->getTypeId() == MWMechanics::AiPackageTypeId::Wander)
+                        static_cast<MWMechanics::AiWander*>(package.get())->reanchor();
+                }
             }
             const MWWorld::CellStore* srcCell = ptr.getCell();
             MWWorld::Ptr newPtr;

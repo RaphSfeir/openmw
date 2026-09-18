@@ -157,6 +157,24 @@ namespace MWMechanics
         const int mTimeOfDay;
         const std::vector<unsigned char> mIdle;
 
+    public:
+        // mp: FORGET THE ANCHOR, so the next tick takes it from wherever the
+        // actor now is.
+        //
+        // A wander package fixes its home point on its first execute and roams
+        // within a radius of it forever after. That is right for an actor the
+        // engine placed, and wrong for one that has been MOVED deliberately:
+        // it treats its new spot as somewhere to walk back from. A multiplayer
+        // session restores where actors were standing, and without this every
+        // restored NPC walked home over the following seconds -- measured at
+        // 414 units of a 446-unit journey heading straight back.
+        //
+        // Called from the Lua teleport path, which is the only way an actor is
+        // repositioned deliberately here. Not from the engine's own placement
+        // paths, which want the plugin's anchor.
+        void reanchor() { mStoredInitialActorPosition = false; }
+
+    private:
         bool mStoredInitialActorPosition;
         // Note: an original engine does not reset coordinates even when actor changes a cell
         osg::Vec3f mInitialActorPosition;
