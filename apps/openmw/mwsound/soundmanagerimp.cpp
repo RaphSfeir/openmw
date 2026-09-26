@@ -472,6 +472,7 @@ namespace MWSound
             sound->init([&] {
                 SoundParams sp;
                 sp.mBaseVolume = basevol;
+                sp.mVolume = params.mGain;
                 sp.mFlags = PlayMode::NoEnvNoScaling | Type::Voice | Play_2D;
                 return sp;
             }());
@@ -487,6 +488,7 @@ namespace MWSound
                 SoundParams sp;
                 sp.mPos = pos;
                 sp.mBaseVolume = basevol;
+                sp.mVolume = params.mGain;
                 sp.mMinDistance = params.mRefDistance;
                 sp.mMaxDistance = params.mMaxDistance;
                 sp.mMinGain = params.mMinGain;
@@ -531,6 +533,7 @@ namespace MWSound
         sound->init([&] {
             SoundParams sp;
             sp.mBaseVolume = volumeFromType(Type::Voice);
+            sp.mVolume = params.mGain;
             sp.mFlags = PlayMode::NoEnvNoScaling | Type::Voice | Play_2D;
             return sp;
         }());
@@ -551,6 +554,18 @@ namespace MWSound
 
         mOutput->finishStream(it->second.mStream.get());
         mActiveVoiceTracks.erase(it);
+    }
+
+    void SoundManager::setVoiceGain(Stream* stream, float gain)
+    {
+        if (stream == nullptr)
+            return;
+        // The SOUND's own volume, not the category's: getRealVolume multiplies
+        // the two, so this composes with the global Voice slider rather than
+        // overriding it. updateStream feeds getRealVolume to AL_GAIN every
+        // frame, which is what makes this take effect on somebody who is
+        // talking at this moment rather than at their next attach.
+        stream->setVolume(std::clamp(gain, 0.0f, 2.0f));
     }
 
     void SoundManager::setVoiceSpeaking(const MWWorld::ConstPtr& ptr, bool speaking)

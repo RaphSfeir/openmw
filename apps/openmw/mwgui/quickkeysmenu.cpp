@@ -572,44 +572,38 @@ namespace MWGui
         return true;
     }
 
-    void QuickKeysMenu::write(ESM::ESMWriter& writer)
+    ESM::QuickKeys QuickKeysMenu::getQuickKeys() const
     {
-        writer.startRecord(ESM::REC_KEYS);
-
         ESM::QuickKeys keys;
 
         // NB: The quick key with index 9 always has Hand-to-Hand type and must not be saved
+        // Read from keyData, not from the button: type and id are kept in step on
+        // every assign and unassign, and a widget read is not something a Lua
+        // worker thread should be doing.
         for (int i = 0; i < 9; ++i)
         {
-            ItemWidget* button = mKey[i].button;
-
-            const ESM::QuickKeys::Type type = mKey[i].type;
-
             ESM::QuickKeys::QuickKey key;
-            key.mType = type;
-
-            switch (type)
+            key.mType = mKey[i].type;
+            switch (key.mType)
             {
+                case ESM::QuickKeys::Type::Item:
+                case ESM::QuickKeys::Type::MagicItem:
+                case ESM::QuickKeys::Type::Magic:
+                    key.mId = mKey[i].id;
+                    break;
                 case ESM::QuickKeys::Type::Unassigned:
                 case ESM::QuickKeys::Type::HandToHand:
                     break;
-                case ESM::QuickKeys::Type::Item:
-                case ESM::QuickKeys::Type::MagicItem:
-                {
-                    MWWorld::Ptr item = *button->getUserData<MWWorld::Ptr>();
-                    key.mId = item.getCellRef().getRefId();
-                    break;
-                }
-                case ESM::QuickKeys::Type::Magic:
-                    key.mId = ESM::RefId::deserialize(button->getUserString("Spell"));
-                    break;
             }
-
             keys.mKeys.push_back(key);
         }
+        return keys;
+    }
 
-        keys.save(writer);
-
+    void QuickKeysMenu::write(ESM::ESMWriter& writer)
+    {
+        writer.startRecord(ESM::REC_KEYS);
+        getQuickKeys().save(writer);
         writer.endRecord(ESM::REC_KEYS);
     }
 
@@ -620,7 +614,11 @@ namespace MWGui
 
         ESM::QuickKeys keys;
         keys.load(reader);
+        setQuickKeys(keys);
+    }
 
+    void QuickKeysMenu::setQuickKeys(const ESM::QuickKeys& keys)
+    {
         MWWorld::Ptr player = MWMechanics::getPlayer();
         MWWorld::InventoryStore& store = player.getClass().getInventoryStore(player);
 
@@ -632,7 +630,7 @@ namespace MWGui
         };
 
         int i = 0;
-        for (ESM::QuickKeys::QuickKey& quickKey : keys.mKeys)
+        for (const ESM::QuickKeys::QuickKey& quickKey : keys.mKeys)
         {
             // NB: The quick key with index 9 always has Hand-to-Hand type and must not be loaded
             if (i >= 9)

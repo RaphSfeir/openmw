@@ -6,6 +6,7 @@
 #include <components/esm3/loadfact.hpp>
 #include <components/esm3/loadnpc.hpp>
 #include <components/esm3/loadrace.hpp>
+#include <components/esm3/quickkeys.hpp>
 #include <components/lua/util.hpp>
 
 #include "../birthsignbindings.hpp"
@@ -407,6 +408,107 @@ namespace MWLua
             if (object.isLObject() && !object.isSelfObject())
                 throw std::runtime_error("Only player and global scripts can toggle teleportation.");
             MWBase::Environment::get().getWorld()->enableTeleporting(state);
+        };
+        // mp addition: the quick-key slots (1-9), which are otherwise savegame-only.
+        //
+        // QuickKeysMenu::write/readRecord are the only road in or out, and both go
+        // through ESM::REC_KEYS in a save file. A multiplayer campaign never loads
+        // or writes a savegame, so every player started every launch with all nine
+        // slots empty and re-bound their spells by hand. This is the same record,
+        // handed to Lua as a list of { index, type, id } so the mod can carry it
+        // in the character snapshot beside inventory and spellbook.
+        //
+        // type is one of 'item', 'magic', 'magicitem', 'unassigned'. Slot 10 is
+        // always hand-to-hand and is neither reported nor settable, exactly as the
+        // savegame treats it.
+        //
+        // The getter reads the menu's own per-slot bookkeeping, not widgets, so it
+        // is as safe from a worker thread as any other state read. The setter
+        // touches MyGUI and is queued to the main thread like every mutation.
+        player["getQuickKeys"] = [](sol::this_state lua, const Object& object) {
+            verifyPlayer(object);
+            sol::table result(lua, sol::create);
+            MWBase::WindowManager* wm = MWBase::Environment::get().getWindowManager();
+            if (wm == nullptr)
+                return result;
+            const ESM::QuickKeys keys = wm->getQuickKeys();
+            int index = 1;
+            for (const ESM::QuickKeys::QuickKey& key : keys.mKeys)
+            {
+                sol::table slot(lua, sol::create);
+                slot["index"] = index;
+                std::string_view type = "unassigned";
+                switch (key.mType)
+                {
+                    case ESM::QuickKeys::Type::Item:
+                        type = "item";
+                        break;
+                    case ESM::QuickKeys::Type::Magic:
+                        type = "magic";
+                        break;
+                    case ESM::QuickKeys::Type::MagicItem:
+                        type = "magicitem";
+                        break;
+                    case ESM::QuickKeys::Type::Unassigned:
+                    case ESM::QuickKeys::Type::HandToHand:
+                        break;
+                }
+                slot["type"] = type;
+                if (!key.mId.empty())
+                    slot["id"] = key.mId.serializeText();
+                result[index++] = slot;
+            }
+            return result;
+        };
+        player["setQuickKeys"] = [context](const Object& object, const sol::table& slots) {
+            verifyPlayer(object);
+            if (object.isLObject() && !object.isSelfObject())
+                throw std::runtime_error("Only player and global scripts can set quick keys.");
+
+            // Nine slots, every one of them written: a partial list leaves the
+            // rest unassigned rather than untouched, so that restoring a snapshot
+            // that had fewer bindings than the machine currently shows does not
+            // silently keep the extras.
+            ESM::QuickKeys keys;
+            keys.mKeys.resize(9);
+            for (ESM::QuickKeys::QuickKey& key : keys.mKeys)
+                key.mType = ESM::QuickKeys::Type::Unassigned;
+
+            for (const auto& [_, entry] : slots)
+            {
+                if (!entry.is<sol::table>())
+                    continue;
+                const sol::table slot = entry.as<sol::table>();
+                const int index = slot.get_or("index", 0);
+                if (index < 1 || index > 9)
+                    throw std::runtime_error("Quick key index must be between 1 and 9.");
+                ESM::QuickKeys::QuickKey& key = keys.mKeys[static_cast<std::size_t>(index - 1)];
+                const std::string type = slot.get_or<std::string>("type", "unassigned");
+                if (type == "item")
+                    key.mType = ESM::QuickKeys::Type::Item;
+                else if (type == "magic")
+                    key.mType = ESM::QuickKeys::Type::Magic;
+                else if (type == "magicitem")
+                    key.mType = ESM::QuickKeys::Type::MagicItem;
+                else if (type == "unassigned")
+                    key.mType = ESM::QuickKeys::Type::Unassigned;
+                else
+                    throw std::runtime_error("Quick key type must be item, magic, magicitem or unassigned.");
+                if (key.mType != ESM::QuickKeys::Type::Unassigned)
+                {
+                    const std::string id = slot.get_or<std::string>("id", "");
+                    if (id.empty())
+                        throw std::runtime_error("An assigned quick key needs an id.");
+                    key.mId = ESM::RefId::deserializeText(id);
+                }
+            }
+
+            context.mLuaManager->addAction(
+                [keys = std::move(keys)] {
+                    if (MWBase::WindowManager* wm = MWBase::Environment::get().getWindowManager())
+                        wm->setQuickKeys(keys);
+                },
+                "setQuickKeysAction");
         };
         // mp addition: rename the character. The record write is exactly what the
         // chargen name dialog performs (MechanicsManager::setPlayerName), so every

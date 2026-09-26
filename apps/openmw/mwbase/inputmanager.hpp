@@ -92,6 +92,10 @@ namespace MWBase
 
         virtual void resetIdleTime() = 0;
         virtual bool isIdle() const = 0;
+        /// Whether the game window currently has input focus. False means SDL is
+        /// delivering it no key events at all, so a key that was down when focus
+        /// left will still read as down.
+        virtual bool isWindowFocused() const = 0;
 
         virtual void executeAction(int action) = 0;
 

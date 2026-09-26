@@ -377,6 +377,8 @@ namespace MWGui
         void cycleWeapon(bool next) override;
 
         void playSound(const ESM::RefId& soundId, float volume = 1.f, float pitch = 1.f) override;
+        ESM::QuickKeys getQuickKeys() const override;
+        void setQuickKeys(const ESM::QuickKeys& keys) override;
 
         void addCell(MWWorld::CellStore* cell) override;
         void removeCell(MWWorld::CellStore* cell) override;

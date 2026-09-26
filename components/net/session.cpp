@@ -44,8 +44,16 @@ namespace Net
         // flat five seconds on any realistic link, which a loading game client
         // exceeds routinely and innocently.
         constexpr std::uint32_t sTimeoutLimit = 32;
-        constexpr std::uint32_t sTimeoutMinimumMs = 20000;
-        constexpr std::uint32_t sTimeoutMaximumMs = 40000;
+        // 60/90 as of 2026-09-13, up from 20/40: a two-player session in the
+        // 557-file Total Overhaul world measured main-thread stalls of ~24 s on
+        // heavy cell loads, and 20 s of silence was dropping a client that was
+        // merely busy. This is the floor under SILENCE, not a ping interval:
+        // ENet keeps pinging on its own schedule and a link that is genuinely
+        // dead is still noticed well inside a minute. Applied by BOTH ends on
+        // connect, so a client with this floor talking to a server without it is
+        // still dropped by the server at the old 20 s -- both binaries must move.
+        constexpr std::uint32_t sTimeoutMinimumMs = 60000;
+        constexpr std::uint32_t sTimeoutMaximumMs = 90000;
         // Outgoing::mTo value that requests a broadcast to all peers (host only).
         constexpr std::uint32_t sBroadcastMarker = 0xFFFFFFFFu;
 
@@ -340,8 +348,8 @@ namespace Net
                         //
                         // A game is not a chat protocol. Being slow is normal here and
                         // being gone is not, so wait properly before concluding the
-                        // second: 20 seconds of complete silence before a healthy link
-                        // is abandoned, 40 at the outside.
+                        // second: a full minute of complete silence before a healthy link
+                        // is abandoned, ninety seconds at the outside.
                         enet_peer_timeout(event.peer, sTimeoutLimit, sTimeoutMinimumMs, sTimeoutMaximumMs);
                         std::uint32_t id = sServerPeerId;
                         if (mLiveRole == Role::Host)

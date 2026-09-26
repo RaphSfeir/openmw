@@ -224,6 +224,12 @@ namespace MWLua
             = [manager = context.mLuaManager](std::string_view key) { manager->inputTriggers().activate(key); };
 
         api["isIdle"] = [input]() { return input->isIdle(); };
+
+        // False while the game window is in the background. SDL delivers no key
+        // events to an unfocused window, so a key that was down when focus left
+        // reads as held for as long as the window stays in the background --
+        // which for push-to-talk means a microphone nobody knows is open.
+        api["isWindowFocused"] = [input]() { return input->isWindowFocused(); };
         api["isActionPressed"] = [input](int action) { return input->actionIsActive(action); };
         api["isKeyPressed"] = [](SDL_Scancode code) -> bool {
             int maxCode;

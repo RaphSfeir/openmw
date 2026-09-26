@@ -137,7 +137,9 @@ namespace MWBase
         {
             uint32_t mSeed = 0; // the campaign's, minted once and pushed to every client
             int mLevel = 0; // the PARTY level; this machine's own level desyncs the roll
-            uint32_t mEpoch = 0; // respawn generation, off the session's shared calendar
+            uint32_t mEpoch = 0; // respawn generation, off the session's shared calendar;
+                                 // the only term in the spawn seed that moves, so it is what
+                                 // re-rolls a point's chanceNone (see creaturelevlist.cpp)
         };
         virtual void setLevelledSpawnRule(std::optional<LevelledSpawnRule> rule) = 0;
         virtual const std::optional<LevelledSpawnRule>& getLevelledSpawnRule() const = 0;

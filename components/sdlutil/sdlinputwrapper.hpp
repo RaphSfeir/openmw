@@ -32,6 +32,11 @@ namespace SDLUtil
         bool isModifierHeld(int mod);
         bool isKeyDown(SDL_Scancode key);
 
+        // SDL delivers no key events to an unfocused window, so a key held at
+        // the moment focus was lost is never seen to be released and reads as
+        // held forever. Anything that latches on a keypress needs to know.
+        bool windowHasFocus() const { return mWindowHasFocus; }
+
         void setMouseVisible(bool visible);
         void setMouseRelative(bool relative);
         bool getMouseRelative() { return mMouseRelative; }

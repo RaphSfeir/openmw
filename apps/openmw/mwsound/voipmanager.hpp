@@ -156,7 +156,7 @@ namespace MWSound
         // record the wish, and update() on the main thread is what actually
         // moves a stream. Attaching a speaker who already has a body is the
         // ordinary case, not an error.
-        void requestAttach(std::uint32_t speakerId, const MWWorld::Ptr& body);
+        void requestAttach(std::uint32_t speakerId, const MWWorld::Ptr& body, const VoiceStreamParams& params = {});
         void requestDetach(std::uint32_t speakerId);
 
         // Route captured audio to a stream on the player's own head. The drill
@@ -217,8 +217,20 @@ namespace MWSound
             // core rebuilds a puppet on any identity or level change, so within
             // seconds of every join.
             MWWorld::Ptr mBody;
+            // What mStream was actually CREATED with, which is not the same
+            // question as what the mod last asked for. Reference distance, max
+            // distance and rolloff are init-only on an AL source, so a settings
+            // slider that moves while somebody is mid-sentence changes the
+            // request and nothing else until the stream is rebuilt. Keeping the
+            // built-with copy is how the sync loop knows a rebuild is owed.
+            VoiceStreamParams mStreamParams;
             std::chrono::steady_clock::time_point mLastPacket{};
             std::uint64_t mReceived = 0;
+            // What the sound manager was last told about this speaker's mouth. A
+            // voice stream is attached for the whole session and mostly quiet,
+            // so the spurt has to be pushed rather than inferred from the
+            // stream existing -- see the comment on sayActive.
+            bool mSpeaking = false;
             // One failed attach is a condition that does not fix itself within a
             // frame, so it is not retried until something changes.
             bool mAttachFailed = false;
@@ -288,7 +300,12 @@ namespace MWSound
         // applied yet. An empty Ptr means detach. Keyed by speaker, so a mod
         // that re-points the same speaker twice before a frame runs only causes
         // the last one to happen, which is the intent.
-        std::map<std::uint32_t, MWWorld::Ptr> mAttachRequests;
+        struct AttachRequest
+        {
+            MWWorld::Ptr mBody; // empty means detach
+            VoiceStreamParams mParams;
+        };
+        std::map<std::uint32_t, AttachRequest> mAttachRequests;
 
         mutable std::mutex mStatsMutex;
         VoipStats mStats;
@@ -315,7 +332,7 @@ namespace MWSound
         // precedes their first spoken word by however long they stay quiet.
         // Applying a body only to a speaker that already exists would drop
         // exactly the common case on the floor.
-        std::map<std::uint32_t, MWWorld::Ptr> mSpeakerBodies;
+        std::map<std::uint32_t, AttachRequest> mSpeakerBodies;
         // Ids the handler heard and had nowhere to put. Creating a decoder there
         // would be ~30 KB of allocation at a rate a remote peer chooses, so the
         // handler only writes the id down and serviceSpeakers() decides.

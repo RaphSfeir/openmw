@@ -47,14 +47,33 @@ namespace MWLua
         //
         // Both only queue: a script may be on the Lua worker thread, and a
         // stream may only be moved on the main thread.
-        api["attach"] = [](unsigned int speakerId, const sol::object& object) {
+        api["attach"] = [](unsigned int speakerId, const sol::object& object,
+                            sol::optional<sol::table> options) {
             MWSound::VoipManager* manager = voip();
             if (manager == nullptr)
                 return;
             MWWorld::Ptr ptr = ObjectVariant(object).ptr();
             if (ptr.isEmpty())
                 throw std::runtime_error("voip.attach: invalid object");
-            manager->requestAttach(static_cast<std::uint32_t>(speakerId), ptr);
+
+            // How far a voice carries is a world rule, not a client preference:
+            // the authority pushes it in its policy so that everyone in a
+            // session hears the same distances. Anything the caller leaves out
+            // keeps the built-in default.
+            MWSound::VoiceStreamParams params;
+            if (options)
+            {
+                params.mRefDistance = options->get_or("refDistance", params.mRefDistance);
+                params.mMaxDistance = options->get_or("maxDistance", params.mMaxDistance);
+                params.mMinGain = options->get_or("minGain", params.mMinGain);
+                params.mRolloff = options->get_or("rolloff", params.mRolloff);
+                // Purely this listener's business, unlike the distances above:
+                // turning somebody down changes nothing about the world, only
+                // about who is bothering to hear them.
+                params.mGain = options->get_or("gain", params.mGain);
+                params.mNonPositional = options->get_or("nonPositional", params.mNonPositional);
+            }
+            manager->requestAttach(static_cast<std::uint32_t>(speakerId), ptr, params);
         };
 
         api["detach"] = [](unsigned int speakerId) {

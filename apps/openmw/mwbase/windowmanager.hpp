@@ -41,6 +41,7 @@ namespace ESM
 {
     class ESMReader;
     class ESMWriter;
+    struct QuickKeys;
 }
 
 namespace MWMechanics
@@ -371,6 +372,12 @@ namespace MWBase
         virtual void cycleWeapon(bool next) = 0;
 
         virtual void playSound(const ESM::RefId& soundId, float volume = 1.f, float pitch = 1.f) = 0;
+
+        /// The player's nine quick-key slots, for scripts that need to carry them
+        /// across something other than a savegame. Never a savegame concern of
+        /// the caller's: the same record the save uses, handed over directly.
+        virtual ESM::QuickKeys getQuickKeys() const = 0;
+        virtual void setQuickKeys(const ESM::QuickKeys& keys) = 0;
 
         virtual void addCell(MWWorld::CellStore* cell) = 0;
         virtual void removeCell(MWWorld::CellStore* cell) = 0;

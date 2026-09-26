@@ -101,6 +101,7 @@ namespace MWInput
 
         void resetIdleTime() override;
         bool isIdle() const override;
+        bool isWindowFocused() const override;
 
         void executeAction(int action) override;
 

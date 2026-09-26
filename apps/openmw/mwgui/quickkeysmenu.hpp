@@ -43,6 +43,13 @@ namespace MWGui
         void updateActivatedQuickKey();
 
         void write(ESM::ESMWriter& writer);
+
+        // The nine assignable slots as a plain record, and the reverse. write and
+        // readRecord are these two plus a savegame; a multiplayer campaign never
+        // writes a savegame at all, so without a way to reach the slots directly
+        // every player starts each launch with all of them empty.
+        ESM::QuickKeys getQuickKeys() const;
+        void setQuickKeys(const ESM::QuickKeys& keys);
         void readRecord(ESM::ESMReader& reader, uint32_t type);
         void clear() override;
 

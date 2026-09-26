@@ -144,6 +144,11 @@ namespace MWInput
         return mActionManager->getIdleTime() > 0.5;
     }
 
+    bool InputManager::isWindowFocused() const
+    {
+        return mInputWrapper != nullptr && mInputWrapper->windowHasFocus();
+    }
+
     std::string_view InputManager::getActionDescription(int action) const
     {
         return mBindingsManager->getActionDescription(action);

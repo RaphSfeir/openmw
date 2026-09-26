@@ -2438,6 +2438,16 @@ namespace MWGui
             mInventoryWindow->cycle(next);
     }
 
+    ESM::QuickKeys WindowManager::getQuickKeys() const
+    {
+        return mQuickKeysMenu->getQuickKeys();
+    }
+
+    void WindowManager::setQuickKeys(const ESM::QuickKeys& keys)
+    {
+        mQuickKeysMenu->setQuickKeys(keys);
+    }
+
     void WindowManager::playSound(const ESM::RefId& soundId, float volume, float pitch)
     {
         if (soundId.empty())

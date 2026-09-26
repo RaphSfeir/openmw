@@ -160,10 +160,19 @@ namespace MWClass
             uint64_t s = MWMechanics::mixSeed(rule->mSeed);
             s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(static_cast<uint32_t>(refNum.mContentFile)));
             s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(refNum.mIndex));
-            // The respawn generation, so a cleared cave does not repopulate with
-            // the identical lineup forever. It comes off the session's shared
-            // calendar; local game time and mLastRespawn are per-client and
-            // would put the divergence straight back.
+            // The respawn generation, and the ONLY term in this seed that ever
+            // moves: the other three are fixed for the life of the campaign. It
+            // therefore decides how often a spawn point gets fresh dice, and the
+            // first thing those dice decide, in getLevelledItem, is the
+            // chanceNone roll. Hold the generation still and a point that rolled
+            // "none" rolls "none" for every visit, on every client, across
+            // relaunches -- where vanilla throws again each time and the point
+            // eventually populates. The session rotates it on the same window
+            // this class re-arms on, min(fCorpseRespawnDelay, fCorpseClearDelay),
+            // so a silent point comes back after one respawn period.
+            // It comes off the session's shared calendar and is computed by the
+            // authority alone; local game time and mLastRespawn are per-client
+            // and would put the divergence straight back.
             s = MWMechanics::mixSeed(s ^ static_cast<uint64_t>(rule->mEpoch));
             spawnSeed = s;
             // The PARTY level, not this machine's. getLevelledItem filters the

@@ -1376,6 +1376,21 @@ namespace MWMechanics
             if (ptr == player)
                 continue; // Don't interfere with player controls.
 
+            // Nor with a body Lua is steering. A multiplayer puppet mirrors a REAL
+            // player's position stream, and that player already did whatever
+            // avoiding they were going to do; steering the mirror around an NPC
+            // means it can never stand where its owner actually stands. Seen in
+            // play as a puppet stuck strafing left-right forever while somebody
+            // cast a touch spell on it: the caster's standoff put the puppet's
+            // target inside the caster's avoidance disc, and every frame the
+            // deflection flipped sign as the target crossed the perpendicular.
+            // isMoving alone does not exempt it, because the driver IS moving it.
+            // Same flag and same lookup the AI-inert checks below use.
+            if (const MWBase::LuaManager::ActorControls* luaControls
+                = MWBase::Environment::get().getLuaManager()->getActorControls(ptr);
+                luaControls != nullptr && luaControls->mDisableAI)
+                continue;
+
             const float maxSpeed = cached.mMaxSpeed;
             if (maxSpeed == 0.0)
                 continue; // Can't move, so there is no sense to predict collisions.

@@ -265,6 +265,11 @@ namespace MWSound
         void stopVoiceTrack(std::uint32_t id);
         ///< Invalidates the Stream* from playVoiceTrack.
 
+        void setVoiceGain(Stream* stream, float gain);
+        ///< This listener's volume for one speaker, changeable while they are talking: updateStream
+        ///< rewrites AL_GAIN from the sound every frame, so nothing has to be rebuilt. Multiplies the
+        ///< global Voice volume rather than replacing it.
+
         std::uint64_t clearGeneration() const { return mClearGeneration; }
         ///< Changes whenever clear() has thrown every voice attachment away, which a holder of a
         ///< Stream* from playVoiceStream/playVoiceTrack cannot otherwise notice. Compare it once per

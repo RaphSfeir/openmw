@@ -39,6 +39,18 @@ namespace MWSound
         // is. Long enough not to mistake a pause for a disconnect.
         constexpr std::chrono::milliseconds sSpeakerTimeout{ 3000 };
 
+        // How long after a speaker's last packet their mouth stays open.
+        //
+        // Packets arrive every 20 ms while somebody holds the key and stop
+        // dead when they let go -- DTX is off, so there is no comfort-noise
+        // trickle to confuse this. Long enough to ride out ordinary loss and
+        // jitter, short enough that the mouth shuts promptly. It may safely be
+        // a little generous at both ends: sayActive only says WHETHER to run
+        // the talk animation, and the loudness the animation is scaled by is
+        // zero through the silence either side, so an early or late edge costs
+        // nothing visible.
+        constexpr std::chrono::milliseconds sSpeakerSpurtGap{ 200 };
+
         // Ids the packet handler may remember before the main thread has had a
         // chance to decide about them. A remote peer picks the ids, so this is
         // the bound on what it can make this machine remember for one frame.
@@ -154,10 +166,10 @@ namespace MWSound
         mDeviceRequestPending = true;
     }
 
-    void VoipManager::requestAttach(std::uint32_t speakerId, const MWWorld::Ptr& body)
+    void VoipManager::requestAttach(std::uint32_t speakerId, const MWWorld::Ptr& body, const VoiceStreamParams& params)
     {
         const std::lock_guard<std::mutex> lock(mRequestMutex);
-        mAttachRequests[speakerId] = body;
+        mAttachRequests[speakerId] = AttachRequest{ body, params };
     }
 
     void VoipManager::requestDetach(std::uint32_t speakerId)
@@ -166,7 +178,7 @@ namespace MWSound
         // speaker, so a detach must be able to overwrite a queued attach that
         // has not been applied yet rather than sit behind it.
         const std::lock_guard<std::mutex> lock(mRequestMutex);
-        mAttachRequests[speakerId] = MWWorld::Ptr();
+        mAttachRequests[speakerId] = AttachRequest{};
     }
 
     std::string VoipManager::captureDevice() const
@@ -627,6 +639,11 @@ namespace MWSound
             return;
         }
 
+        // The mouth belongs to the stream, so a stream that is going takes the
+        // flag with it: a rebuilt one starts closed and the next pass reopens
+        // it if the speaker is still talking.
+        speaker.mSpeaking = false;
+
         // Whichever kind of stream this speaker has. The two are different
         // containers in the sound manager, keyed differently, and stopping the
         // wrong one silently leaves the real stream running.
@@ -647,17 +664,17 @@ namespace MWSound
         // MAIN THREAD. Scripts only ever queue; this is the one place a stream
         // moves, because attaching touches the sound manager.
         {
-            std::map<std::uint32_t, MWWorld::Ptr> requests;
+            std::map<std::uint32_t, AttachRequest> requests;
             {
                 const std::lock_guard<std::mutex> lock(mRequestMutex);
                 requests.swap(mAttachRequests);
             }
-            for (const auto& [id, body] : requests)
+            for (const auto& [id, request] : requests)
             {
-                if (body.isEmpty())
+                if (request.mBody.isEmpty())
                     mSpeakerBodies.erase(id);
                 else
-                    mSpeakerBodies[id] = body;
+                    mSpeakerBodies[id] = request;
             }
         }
 
@@ -668,11 +685,34 @@ namespace MWSound
         for (auto& [id, speaker] : mSpeakers)
         {
             const auto known = mSpeakerBodies.find(id);
-            const MWWorld::Ptr wanted = known == mSpeakerBodies.end() ? MWWorld::Ptr() : known->second;
+            const MWWorld::Ptr wanted = known == mSpeakerBodies.end() ? MWWorld::Ptr() : known->second.mBody;
+            const VoiceStreamParams wantedParams
+                = known == mSpeakerBodies.end() ? VoiceStreamParams{} : known->second.mParams;
 
-            if (wanted.isEmpty() && speaker.mBody.isEmpty())
+            // Volume, unlike geometry, is live. updateStream feeds the sound's
+            // own volume to AL_GAIN every frame, so turning one person down
+            // takes effect mid-sentence and costs nothing -- no rebuild, no
+            // gap, no reallocated source. Done before the geometry test so it
+            // still happens on the overwhelmingly common path where nothing
+            // else about the speaker has changed.
+            if (speaker.mStream != nullptr && wantedParams.mGain != speaker.mStreamParams.mGain)
+            {
+                mSounds.setVoiceGain(speaker.mStream, wantedParams.mGain);
+                speaker.mStreamParams.mGain = wantedParams.mGain;
+            }
+
+            // A live stream whose GEOMETRY has changed has to be rebuilt even
+            // though its body has not moved: reference distance, max distance
+            // and rolloff are written to the AL source only by initCommon3D,
+            // and nothing refreshes them afterwards. Without this, a player
+            // dragging the hearing sliders in the settings menu changes what
+            // the next stream will sound like and not what they are listening
+            // to, which is precisely backwards from what a slider is for.
+            const bool geometryStale = speaker.mStream != nullptr && !wantedParams.sameGeometry(speaker.mStreamParams);
+
+            if (wanted.isEmpty() && speaker.mBody.isEmpty() && !geometryStale)
                 continue;
-            if (!wanted.isEmpty() && !speaker.mBody.isEmpty() && wanted == speaker.mBody)
+            if (!wanted.isEmpty() && !speaker.mBody.isEmpty() && wanted == speaker.mBody && !geometryStale)
                 continue;
 
             // Stop first, start second, and never the other way round. The
@@ -812,10 +852,28 @@ namespace MWSound
             // from playVoiceStream. Without one it stays flat, which is what a
             // speaker sounds like before the mod has said which puppet is
             // theirs, and what they fall back to if that body goes away.
+            // Recorded whichever branch runs, because the sync loop compares
+            // against it to decide whether a live stream owes a rebuild. A
+            // bodyless track has no geometry to go stale, so the default is the
+            // honest answer there.
+            speaker.mStreamParams = VoiceStreamParams{};
+
             if (speaker.mBody.isEmpty())
+            {
                 speaker.mStream = mSounds.playVoiceTrack(id, speaker.mDecoder, VoiceStreamParams{});
+            }
             else
-                speaker.mStream = mSounds.playVoiceStream(speaker.mBody, speaker.mDecoder, VoiceStreamParams{});
+            {
+                // The distances the authority asked for, not the built-in ones:
+                // how far a voice carries is a world rule, and a session where
+                // each client decided it for itself would have people audible
+                // to some of the party and not to others.
+                const auto known = mSpeakerBodies.find(id);
+                const VoiceStreamParams params
+                    = known == mSpeakerBodies.end() ? VoiceStreamParams{} : known->second.mParams;
+                speaker.mStreamParams = params;
+                speaker.mStream = mSounds.playVoiceStream(speaker.mBody, speaker.mDecoder, params);
+            }
 
             if (speaker.mStream == nullptr)
             {
@@ -828,6 +886,29 @@ namespace MWSound
             else if (!speaker.mBody.isEmpty())
             {
                 Log(Debug::Info) << "[voip] speaker " << id << " now sounds from their body";
+            }
+        }
+
+        // WHOSE MOUTH MOVES, and why it is here rather than beside the loopback
+        // flag above: that one is driven by mTransmitWanted, which is THIS
+        // machine's push-to-talk, and applies to the local player's own
+        // attachment. A remote speaker has no such signal here -- their key is
+        // on their keyboard -- so the only honest evidence that they are
+        // talking is that their packets are still arriving.
+        //
+        // Without this, a remote speaker's mSpeaking stayed false for the life
+        // of the attachment, sayActive answered no, and HeadAnimationTime took
+        // the BLINK branch forever. Voice worked; nobody's mouth ever moved.
+        const std::chrono::steady_clock::time_point mouthNow = std::chrono::steady_clock::now();
+        for (auto& [id, speaker] : mSpeakers)
+        {
+            if (speaker.mStream == nullptr || speaker.mBody.isEmpty())
+                continue;
+            const bool speaking = mouthNow - speaker.mLastPacket < sSpeakerSpurtGap;
+            if (speaking != speaker.mSpeaking)
+            {
+                speaker.mSpeaking = speaking;
+                mSounds.setVoiceSpeaking(speaker.mBody, speaking);
             }
         }
     }
