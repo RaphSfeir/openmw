@@ -94,6 +94,15 @@ namespace MWBase
         // values that converge, and suppressing them would show the object in
         // the wrong place for a round trip -- so this reports the RESULT.
         virtual void objectTransformed(const MWWorld::Ptr& object) = 0;
+        // MP: an mwscript AddItem/RemoveItem changed a WORLD CONTAINER's
+        // contents and the engine HAS applied it -- the objectTransformed
+        // choice, not the deferred one, because a script may read the store
+        // back immediately. `delta` is signed; `script` names the running
+        // script ("dialogue:<speaker>" for a result script, "unknown" from the
+        // console). Nothing else in the engine reports a container change.
+        virtual void containerScriptWrite(const MWWorld::Ptr& object, std::string_view script, const ESM::RefId& item,
+            int delta, bool levelled)
+            = 0;
         virtual void useItem(const MWWorld::Ptr& object, const MWWorld::Ptr& actor, bool force) = 0;
         virtual void animationTextKey(const MWWorld::Ptr& actor, const std::string& key) = 0;
         virtual void playAnimation(const MWWorld::Ptr& object, const std::string& groupname,

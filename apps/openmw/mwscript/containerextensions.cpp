@@ -18,6 +18,7 @@
 #include <components/esm3/loadskil.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/luamanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -48,6 +49,52 @@ namespace
             for (int i = 0; i < count; i++)
                 store.add(itemPtr, 1, true, resolve);
         }
+    }
+
+    // MP: A SCRIPT FILLED OR EMPTIED A WORLD CONTAINER, AND IT SAYS SO.
+    //
+    // Reported AFTER the engine applied it, the onObjectTransform choice rather
+    // than the Enable/Disable one: a GetItemCount in the same script can read
+    // the store the next statement, and the party's own quest scripts must not
+    // wait a round trip to see what they just put somewhere.
+    //
+    // This is the only place in the engine that knows a SCRIPT changed a
+    // container -- ContainerStore has no Lua-facing change notification at all,
+    // so without this the multiplayer layer learns of a script's AddItem only
+    // if a player happens to open the container and close it again, and its
+    // stored snapshot (often an empty one, from a curiosity click before the
+    // quest ran) erases the items instead. That is the Fargoth stump: the
+    // record is empty in Morrowind.esm and its 300 gold exists only because
+    // lookoutScript put it there, on one machine.
+    static void mpNoteContainerWrite(
+        Interpreter::Runtime& runtime, const MWWorld::Ptr& ptr, const ESM::RefId& item, int delta, bool levelled)
+    {
+        if (delta == 0 || ptr.isEmpty())
+            return;
+        // WORLD CONTAINERS ONLY. An actor's inventory is replicated by the
+        // actor roads (equipment, corpse snapshots, the player's own
+        // character), and reporting those here would fight them.
+        if (ptr.getType() != ESM::Container::sRecordId)
+            return;
+        // NOT A CONTAINER INSIDE A BAG, for the reason mpNoteTransform records:
+        // LuaManager begins with WorldModel::registerPtr, and for a ref whose
+        // RefNum is unset that MINTS one and writes it into the CellRef --
+        // ContainerStore unsets RefNums deliberately.
+        if (ptr.getContainerStore() != nullptr || !ptr.isInCell())
+            return;
+        auto lua = MWBase::Environment::get().getLuaManager();
+        if (!lua->isNetSessionActive())
+            return;
+        std::string who;
+        if (auto* mwCtx = dynamic_cast<MWScript::InterpreterContext*>(&runtime.getContext()))
+        {
+            who = mwCtx->getScriptName();
+            if (who == "dialogue")
+                who += ":" + mwCtx->getTarget().getRefIdString();
+        }
+        if (who.empty())
+            who = "unknown"; // the console, and anything else without a name
+        lua->containerScriptWrite(ptr, who, item, delta, levelled);
     }
 
     void addRandomToStore(const MWWorld::Ptr& itemPtr, int count, MWWorld::ContainerStore& store, bool topLevel = true)
@@ -153,6 +200,11 @@ namespace MWScript
                                 addToStore(itemPtr, count, store, store.isResolved());
                         }
                     }
+                    // The TARGET only, not every instance of the record: the
+                    // session addresses a container by its own reference, and a
+                    // non-unique record's siblings have no address of their own
+                    // here. Vanilla's script-written containers are unique refs.
+                    mpNoteContainerWrite(runtime, ptr, item, count, isLevelledList);
                     return;
                 }
                 MWWorld::ContainerStore& store = ptr.getClass().getContainerStore(ptr);
@@ -160,6 +212,7 @@ namespace MWScript
                     addRandomToStore(itemPtr, count, store);
                 else
                     addToStore(itemPtr, count, store);
+                mpNoteContainerWrite(runtime, ptr, item, count, isLevelledList);
 
                 // Spawn a messagebox (only for items added to player's inventory and if player is talking to someone)
                 if (ptr == MWBase::Environment::get().getWorld()->getPlayerPtr())
@@ -266,6 +319,7 @@ namespace MWScript
                                 store.remove(item, count, false, false);
                         }
                     }
+                    mpNoteContainerWrite(runtime, ptr, item, -count, false);
                     return;
                 }
                 MWWorld::ContainerStore& store = ptr.getClass().getContainerStore(ptr);
@@ -281,6 +335,7 @@ namespace MWScript
                 }
 
                 int numRemoved = store.remove(item, count);
+                mpNoteContainerWrite(runtime, ptr, item, -numRemoved, false);
 
                 // Spawn a messagebox (only for items removed from player's inventory)
                 if ((numRemoved > 0) && (ptr == MWMechanics::getPlayer()))

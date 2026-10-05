@@ -21,7 +21,7 @@ namespace MWLua
             registerEngineHandlers({ &mObjectActiveHandlers, &mActorActiveHandlers, &mItemActiveHandlers,
                 &mNewGameHandlers, &mPlayerAddedHandlers, &mOnActivateHandlers, &mOnUseItemHandlers,
                 &mOnNewExteriorHandlers, &mOnDroppedHandlers, &mOnPlacedHandlers, &mOnProjectileHit,
-                &mOnObjectStateRequestHandlers, &mOnObjectTransformHandlers });
+                &mOnObjectStateRequestHandlers, &mOnObjectTransformHandlers, &mOnContainerScriptWriteHandlers });
         }
 
         void newGameStarted() { callEngineHandlers(mNewGameHandlers); }
@@ -57,6 +57,14 @@ namespace MWLua
         // MP: a script moved/rotated/rescaled this object and the engine HAS
         // applied it; the handler's job is to tell everyone else.
         void onObjectTransform(const GObject& obj) { callEngineHandlers(mOnObjectTransformHandlers, obj); }
+        // MP: a script wrote items into (or out of) this world container and the
+        // engine HAS applied it, on this machine only. The handler's job is to
+        // tell the session, which owns what every machine ends up holding.
+        void onContainerScriptWrite(
+            const GObject& obj, const std::string& script, const std::string& item, int delta, bool levelled)
+        {
+            callEngineHandlers(mOnContainerScriptWriteHandlers, obj, script, item, delta, levelled);
+        }
         void onNewExterior(const GCell& cell) { callEngineHandlers(mOnNewExteriorHandlers, cell); }
         void onProjectileHit(const sol::table& projectile, const sol::table& hitResult)
         {
@@ -74,6 +82,7 @@ namespace MWLua
         EngineHandlerList mOnPlacedHandlers{ "onPlaced" };
         EngineHandlerList mOnObjectStateRequestHandlers{ "onObjectStateRequest" };
         EngineHandlerList mOnObjectTransformHandlers{ "onObjectTransform" };
+        EngineHandlerList mOnContainerScriptWriteHandlers{ "onContainerScriptWrite" };
         EngineHandlerList mOnUseItemHandlers{ "_onUseItem" };
         EngineHandlerList mOnNewExteriorHandlers{ "onNewExterior" };
         EngineHandlerList mOnProjectileHit{ "_onProjectileHit" };

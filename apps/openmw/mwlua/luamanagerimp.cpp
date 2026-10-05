@@ -621,6 +621,14 @@ namespace MWLua
         mEngineEvents.addToQueue(EngineEvents::OnTransformed{ getId(object) });
     }
 
+    void LuaManager::containerScriptWrite(const MWWorld::Ptr& object, std::string_view script,
+        const ESM::RefId& item, int delta, bool levelled)
+    {
+        MWBase::Environment::get().getWorldModel()->registerPtr(object);
+        mEngineEvents.addToQueue(EngineEvents::OnContainerScriptWrite{
+            getId(object), std::string(script), item.serializeText(), delta, levelled });
+    }
+
     void LuaManager::animationTextKey(const MWWorld::Ptr& actor, const std::string& key)
     {
         auto pos = key.find(": ");

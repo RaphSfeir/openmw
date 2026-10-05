@@ -91,6 +91,19 @@ Engine handler is a function defined by a script, that can be called by the engi
       | of each machine deciding for itself. Whoever handles this owns the
       | decision and must do the applying (``object.enabled = ...``). Outside
       | a session the opcodes behave as vanilla and this never fires.
+  * - onContainerScriptWrite(object, script, item, delta, levelled)
+    - | Multiplayer only. An mwscript ``AddItem``/``RemoveItem`` changed the
+      | contents of this WORLD CONTAINER (never an actor's inventory) and the
+      | engine HAS applied it, on this machine alone -- the same choice as
+      | ``onObjectTransform``, because a script may read the store back on its
+      | next statement. ``script`` is the running script's record id,
+      | ``dialogue:<speaker>`` for a dialogue result script, ``unknown`` from
+      | the console; ``item`` is a record id, ``delta`` is signed, and
+      | ``levelled`` is true when ``item`` names a levelled list (the items it
+      | produced are not reported). Fires for resolved and unresolved
+      | containers alike; for an unresolved one the change lives in the base
+      | record until the container is first resolved. Outside a session this
+      | never fires.
 
 **Only for local scripts**
 

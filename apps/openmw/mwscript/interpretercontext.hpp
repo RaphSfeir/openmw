@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include <string>
 
 #include <components/esm/refid.hpp>
 #include <components/interpreter/context.hpp>
@@ -26,6 +27,11 @@ namespace MWScript
         Locals* mLocals;
         mutable MWWorld::Ptr mReference;
         std::shared_ptr<GlobalScriptDesc> mGlobalScriptDesc;
+        // MP: which script is running, for opcodes that have to say WHO did
+        // something (see mwscript/containerextensions mpNoteContainerWrite).
+        // The interpreter never knew: ScriptManager::run has the name and
+        // dropped it, and a dialogue result script has no name at all.
+        std::string mScriptName;
 
         /// If \a id is empty, a reference the script is run from is returned or in case
         /// of a non-local script the reference derived from the target ID.
@@ -48,6 +54,13 @@ namespace MWScript
         ///< The ownership of \a locals is not transferred. 0-pointer allowed.
 
         ESM::RefId getTarget() const override;
+
+        // MP: set by ScriptManager::run and by the dialogue executor; empty
+        // for the console. Not an override -- the interpreter has no notion
+        // of a script name.
+        void setScriptName(std::string_view name) { mScriptName = std::string(name); }
+
+        const std::string& getScriptName() const { return mScriptName; }
 
         int getLocalShort(int index) const override;
 

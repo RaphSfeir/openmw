@@ -102,6 +102,12 @@ namespace MWScript
             assert(iter != mScripts.end());
         }
 
+        // MP: let the context name its own script, so an opcode can report who
+        // did something (mwscript/containerextensions). Costs one dynamic_cast
+        // per script run; every in-game context is an MWScript one.
+        if (auto* mwCtx = dynamic_cast<InterpreterContext*>(&interpreterContext))
+            mwCtx->setScriptName(name.getRefIdString());
+
         // execute script
         const auto& target = interpreterContext.getTarget();
         if (!iter->second.mProgram.mInstructions.empty()

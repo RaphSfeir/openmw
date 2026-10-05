@@ -118,6 +118,15 @@ namespace MWLua
             mGlobalScripts.onObjectTransform(GObject(obj));
         }
 
+        void operator()(const OnContainerScriptWrite& event) const
+        {
+            MWWorld::Ptr obj = getPtr(event.mObject);
+            if (obj.isEmpty())
+                return;
+            mGlobalScripts.onContainerScriptWrite(
+                GObject(obj), event.mScript, event.mItem, event.mDelta, event.mLevelled);
+        }
+
         void operator()(const OnNewExterior& event) const { mGlobalScripts.onNewExterior(GCell{ &event.mCell }); }
 
         void operator()(const OnAnimationTextKey& event) const

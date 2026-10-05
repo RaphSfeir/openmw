@@ -257,6 +257,11 @@ namespace MWDialogue
             try
             {
                 MWScript::InterpreterContext interpreterContext(&actor.getRefData().getLocals(), actor);
+                // MP: a dialogue result script is compiled on the fly and has no
+                // record id. The speaker is its identity, so the opcode that
+                // reports a world write says "dialogue:<speaker>" (see
+                // mwscript/containerextensions mpNoteContainerWrite).
+                interpreterContext.setScriptName("dialogue");
                 Interpreter::Interpreter interpreter;
                 MWScript::installOpcodes(interpreter);
                 interpreter.run(*program, interpreterContext);

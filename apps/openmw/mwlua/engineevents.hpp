@@ -114,9 +114,19 @@ namespace MWLua
         {
             ESM::RefNum mObject;
         };
+        // MP: a script's AddItem/RemoveItem on a world container, reported
+        // after the engine has applied it.
+        struct OnContainerScriptWrite
+        {
+            ESM::RefNum mObject;
+            std::string mScript;
+            std::string mItem;
+            int mDelta;
+            bool mLevelled;
+        };
         using Event = std::variant<OnActive, OnInactive, OnConsume, OnActivate, OnUseItem, OnNewExterior, OnTeleported,
             OnAnimationTextKey, OnAnimationEnded, OnSkillUse, OnSkillLevelUp, OnJailTimeServed, OnDropped, OnPlaced,
-            OnStateRequest, OnTransformed>;
+            OnStateRequest, OnTransformed, OnContainerScriptWrite>;
 
         void clear() { mQueue.clear(); }
         void addToQueue(Event e) { mQueue.push_back(std::move(e)); }

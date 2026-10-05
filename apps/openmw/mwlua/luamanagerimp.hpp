@@ -107,6 +107,8 @@ namespace MWLua
             const osg::Quat& rotation) override;
         void objectStateRequest(const MWWorld::Ptr& object, bool enable) override;
         void objectTransformed(const MWWorld::Ptr& object) override;
+        void containerScriptWrite(const MWWorld::Ptr& object, std::string_view script, const ESM::RefId& item,
+            int delta, bool levelled) override;
         void animationTextKey(const MWWorld::Ptr& actor, const std::string& key) override;
         void playAnimation(const MWWorld::Ptr& actor, const std::string& groupname,
             const MWRender::AnimPriority& priority, int blendMask, bool autodisable, float speedmult,
