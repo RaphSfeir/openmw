@@ -45,6 +45,27 @@ namespace ESM
         // ID of creature trapped in this soul gem
         ESM::RefId mSoul;
 
+        // MULTIPLAYER IDENTITY. A number the session puts on this reference so
+        // every machine can name the same object, assigned once and carried for
+        // the reference's whole life. 0 = never assigned.
+        //
+        // Needed because a RUNTIME object has no portable identity of its own:
+        // mRefNum is meaningful only in the cell the content files placed it
+        // in, and entering a container unsets it outright (ContainerStore)
+        // along with any Lua script state attached to it. So an item picked up
+        // and dropped again comes back as a brand new reference with a
+        // process-local number that means nothing to anyone else. Without a
+        // field like this one a multiplayer layer has to GUESS which object is
+        // which -- by record and position, which stops working the moment the
+        // object moves, settles or is re-created in a different order -- and
+        // every guess is a chance to lose an object or to duplicate it.
+        //
+        // Deliberately NOT cleared by unsetRefNum: that erases a cell-local
+        // address, while this is meant to outlive the cell. A stack that merges
+        // keeps one id, which is correct -- a pile of five lockpicks is one
+        // object in the world.
+        uint32_t mMpId;
+
         // The faction that owns this object (and will get angry if
         // you take it and are not a faction member)
         ESM::RefId mFaction;

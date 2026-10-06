@@ -274,6 +274,20 @@ namespace MWWorld
         }
     }
 
+    void CellRef::setMpId(uint32_t id)
+    {
+        if (id != getMpId())
+        {
+            mChanged = true;
+            std::visit(ESM::VisitOverload{
+                           [&](ESM4::Reference& /*ref*/) {},
+                           [&](ESM4::ActorCharacter&) {},
+                           [&](ESM::CellRef& ref) { ref.mMpId = id; },
+                       },
+                mCellRef.mVariant);
+        }
+    }
+
     void CellRef::setSoul(const ESM::RefId& soul)
     {
         if (soul != getSoul())

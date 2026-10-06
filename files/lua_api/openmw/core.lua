@@ -187,6 +187,21 @@
 -- @field #number factionRank Rank required to be allowed to pick up the object (`nil` if any rank is allowed). Global and self scripts can set the value.
 
 ---
+-- Multiplayer only. A number the session has put on this object so every
+-- machine can name the same thing, or 0 when nothing has. Readable from any
+-- script; assignable only from a global script, and only once per object by
+-- convention -- it is identity, not a scratch field.
+--
+-- It exists because a runtime object has no portable identity of its own: an
+-- object's @{#GameObject.id} is local to one process, and a reference loses
+-- its content-file reference number (and any attached Lua script state) the
+-- moment it enters a container, so an item that is picked up and dropped
+-- again comes back as a different reference entirely. Anything that has to
+-- agree across machines about WHICH object this is should use this field
+-- rather than inferring identity from a record id and a position.
+-- @field [parent=#GameObject] #number mpId
+
+---
 -- Does the object still exist and is available.
 -- Returns true if the object exists and loaded, and false otherwise. If false, then every
 -- access to the object will raise an error.

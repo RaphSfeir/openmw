@@ -94,6 +94,10 @@ namespace ESM
                     case fourCC("XSOL"):
                         getRefIdOrSkip(cellRef.mSoul);
                         break;
+                    // MP: the session's own identity for this reference.
+                    case fourCC("XMPI"):
+                        getHTOrSkip(cellRef.mMpId);
+                        break;
                     case fourCC("CNAM"):
                         getRefIdOrSkip(cellRef.mFaction);
                         break;
@@ -203,6 +207,10 @@ namespace ESM
 
         esm.writeHNOCString("BNAM", mGlobalVariable);
         esm.writeHNOCRefId("XSOL", mSoul);
+        // MP: written for carried items too -- an item keeps its identity
+        // while it is in a pocket, which is most of the point of having one.
+        if (mMpId != 0)
+            esm.writeHNT("XMPI", mMpId);
 
         if (!inInventory)
         {
@@ -256,6 +264,7 @@ namespace ESM
         mOwner = ESM::RefId();
         mGlobalVariable.clear();
         mSoul = ESM::RefId();
+        mMpId = 0;
         mFaction = ESM::RefId();
         mFactionRank = -2;
         mChargeInt = -1;

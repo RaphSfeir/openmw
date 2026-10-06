@@ -162,6 +162,20 @@ namespace MWWorld
         }
         void setSoul(const ESM::RefId& soul);
 
+        // MP: the session's identity for this reference, 0 when unassigned.
+        // See ESM::CellRef::mMpId for why a reference needs one at all.
+        uint32_t getMpId() const
+        {
+            struct Visitor
+            {
+                uint32_t operator()(const ESM::CellRef& ref) { return ref.mMpId; }
+                uint32_t operator()(const ESM4::Reference& /*ref*/) { return 0; }
+                uint32_t operator()(const ESM4::ActorCharacter&) { throw std::logic_error("Not applicable"); }
+            };
+            return std::visit(Visitor(), mCellRef.mVariant);
+        }
+        void setMpId(uint32_t id);
+
         // The faction that owns this object (and will get angry if
         // you take it and are not a faction member)
         ESM::RefId getFaction() const

@@ -418,6 +418,24 @@ namespace MWLua
             else
                 objectT["enabled"] = sol::readonly_property(isEnabled);
 
+            // MP: the session's identity for this object. Readable anywhere,
+            // writable only from a global script -- assigning identity is the
+            // session's job and exactly one machine may do it.
+            //
+            // Applied IMMEDIATELY rather than through the action queue, unlike
+            // its neighbours here: the caller's very next statement is normally
+            // 'now record this id', and a deferred write would have it read back
+            // 0 and mint a second id for the same object.
+            auto getMpId = [](const ObjectT& o) -> uint32_t { return o.ptr().getCellRef().getMpId(); };
+            if constexpr (std::is_same_v<ObjectT, GObject>)
+            {
+                objectT["mpId"] = sol::property(getMpId, [](const GObject& o, uint32_t id) {
+                    o.ptr().getCellRef().setMpId(id);
+                });
+            }
+            else
+                objectT["mpId"] = sol::readonly_property(getMpId);
+
             if constexpr (std::is_same_v<ObjectT, GObject>)
             { // Only for global scripts
                 objectT["setScale"] = [context](const GObject& object, float scale) {
