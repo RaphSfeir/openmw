@@ -66,9 +66,18 @@
 -- @usage local bloodTextureName = core.getGMST('Blood_Texture_1') -- get a "fallback" parameter value from openmw.cfg (always a string)
 
 ---
--- The game's difficulty setting.
+-- The game's difficulty in force: the value ordered with `setGameDifficulty`
+-- when one is set, otherwise the user's own difficulty setting.
 -- @function [parent=#core] getGameDifficulty
 -- @return #number
+
+---
+-- Order a difficulty for this process (global scripts only), overriding the
+-- user's setting until lifted with `nil`. The built-in combat scripts read
+-- `getGameDifficulty` on every blow, so it takes effect at once; the user's
+-- own setting is never changed or saved.
+-- @function [parent=#core] setGameDifficulty
+-- @param #number value The difficulty (the options menu's range is -100..100), or nil to lift the order.
 
 ---
 -- Return l10n formatting function for the given context.

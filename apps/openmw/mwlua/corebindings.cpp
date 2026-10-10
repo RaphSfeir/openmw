@@ -10,7 +10,6 @@
 #include <components/lua/util.hpp>
 #include <components/misc/strings/algorithm.hpp>
 #include <components/misc/strings/lower.hpp>
-#include <components/settings/values.hpp>
 #include <components/version/version.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -18,6 +17,8 @@
 #include "../mwbase/world.hpp"
 #include "../mwworld/datetimemanager.hpp"
 #include "../mwworld/esmstore.hpp"
+
+#include "../mwmechanics/difficultyscaling.hpp"
 
 #include "context.hpp"
 #include "coremwscriptbindings.hpp"
@@ -168,7 +169,20 @@ namespace MWLua
         api["l10n"] = context.cachePackage("openmw_core_l10n",
             [lua]() { return LuaUtil::initL10nLoader(lua, MWBase::Environment::get().getL10nManager()); });
 
-        api["getGameDifficulty"] = []() { return Settings::game().mDifficulty.get(); };
+        // mp: the difficulty IN FORCE -- the session's rule when one is set,
+        // else the user's own setting. The builtin combat scripts read this on
+        // every blow, so a rule reaches every hit without touching the setting
+        // (which the engine would otherwise save back into the user's
+        // settings.cfg on exit). Global scripts only may set it: a player
+        // script or a mod must not be able to make its own game easier under a
+        // session rule. nil lifts the rule.
+        api["getGameDifficulty"] = []() { return getEffectiveDifficulty(); };
+        if (context.mType == Context::Global)
+        {
+            api["setGameDifficulty"] = [](sol::optional<int> value) {
+                setDifficultyOverride(value ? std::optional<int>(*value) : std::nullopt);
+            };
+        }
 
         sol::table readOnlyApi = LuaUtil::makeReadOnly(api);
         return context.setTypePackage(readOnlyApi, "openmw_core");
