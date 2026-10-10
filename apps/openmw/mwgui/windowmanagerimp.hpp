@@ -383,6 +383,8 @@ namespace MWGui
         void addCell(MWWorld::CellStore* cell) override;
         void removeCell(MWWorld::CellStore* cell) override;
         void writeFog(MWWorld::CellStore* cell) override;
+        void reloadFog(MWWorld::CellStore* cell) override;
+        void customMarkersChanged() override;
 
         const MWGui::TextColours& getTextColours() override;
 

@@ -85,6 +85,13 @@ namespace MWRender
          */
         void saveFogOfWar(MWWorld::CellStore* cell) const;
 
+        // MP: the cell's stored fog (CellStore::getFog) has just been replaced
+        // while the cell is drawn; copy it into the drawn segments IN PLACE, so
+        // every widget already holding their textures shows it. Nothing is
+        // written back to the cell and nothing is re-rendered. An interior
+        // whose stored bounds differ from the drawn ones is left alone.
+        void reloadFogOfWar(const MWWorld::CellStore* cell);
+
         /**
          * Get the interior map texture index and normalized position on this texture, given a world position
          */
@@ -124,6 +131,7 @@ namespace MWRender
         {
             void initFogOfWar();
             void loadFogOfWar(const ESM::FogTexture& fog);
+            void reloadFogOfWar(const ESM::FogTexture& fog); // MP: into the existing image and texture
             void saveFogOfWar(ESM::FogTexture& fog) const;
             void createFogOfWarTexture();
 

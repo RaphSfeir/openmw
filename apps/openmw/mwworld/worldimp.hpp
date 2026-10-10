@@ -233,6 +233,9 @@ namespace MWWorld
 
         void readRecord(ESM::ESMReader& reader, uint32_t type) override;
 
+        void writeFogRecords(ESM::ESMWriter& writer) override;
+        bool readFogRecord(ESM::ESMReader& reader) override;
+
         // switch to POV before showing player's death animation
         void useDeathCamera() override;
 

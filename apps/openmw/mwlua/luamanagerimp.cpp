@@ -26,6 +26,8 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "mapmemory.hpp"
+
 #include "../mwrender/bonegroup.hpp"
 #include "../mwrender/postprocessor.hpp"
 
@@ -537,8 +539,6 @@ namespace MWLua
         });
     }
 
-    void LuaManager::applyMagicEffects(ESM::RefId id, const MWWorld::Ptr& caster, ESM::RefNum item,
-        const MWWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
     void LuaManager::saveMapMemoryAgain(bool forget)
     {
         if (mMapMemoryFile.empty())
@@ -590,6 +590,8 @@ namespace MWLua
         });
     }
 
+    void LuaManager::applyMagicEffects(ESM::RefId id, const MWWorld::Ptr& caster, ESM::RefNum item,
+        const MWWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
         bool stackable, bool isReflect)
     {
         if (!target.isEmpty() && !effects.empty())

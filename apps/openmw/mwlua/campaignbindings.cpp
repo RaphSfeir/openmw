@@ -1,5 +1,6 @@
 #include "campaignbindings.hpp"
 
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -17,6 +18,7 @@
 
 #include "context.hpp"
 #include "luamanagerimp.hpp"
+#include "mapmemory.hpp"
 
 namespace MWLua
 {
@@ -33,6 +35,21 @@ namespace MWLua
         // leading/trailing space or period (Windows) and "..". Still
         // constrained rather than sanitized: a rejected name is a bug the
         // caller hears about.
+        // The DOS device names: a file called NUL or CON1.x opens the device
+        // on Windows, whatever the extension. The stem is what is reserved.
+        bool isReservedStem(std::string_view name)
+        {
+            std::string stem(name.substr(0, name.find('.')));
+            for (char& c : stem)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL")
+                return true;
+            if (stem.size() == 4 && (stem.compare(0, 3, "COM") == 0 || stem.compare(0, 3, "LPT") == 0)
+                && stem[3] >= '0' && stem[3] <= '9')
+                return true;
+            return false;
+        }
+
         bool isValidName(std::string_view name)
         {
             if (name.empty() || name.size() > 200)
@@ -40,6 +57,8 @@ namespace MWLua
             if (name.front() == ' ' || name.front() == '.' || name.back() == ' ' || name.back() == '.')
                 return false;
             if (name.find("..") != std::string_view::npos)
+                return false;
+            if (isReservedStem(name))
                 return false;
             for (const char c : name)
             {
@@ -74,6 +93,14 @@ namespace MWLua
             return campaignDir(context) / (std::string(name) + ".json");
         }
 
+        // The map memory lives beside the campaigns, under the same name rule.
+        std::filesystem::path mapFileFor(const Context& context, std::string_view name)
+        {
+            if (!isValidName(name))
+                throw std::runtime_error("campaign: invalid map name (a-z, A-Z, 0-9, '-', '_', '@' only)");
+            return context.mLuaManager->userConfigPath() / "mp-maps" / (std::string(name) + ".omwmap");
+        }
+
     }
 
     sol::table initCampaignPackage(const Context& context)
@@ -100,6 +127,38 @@ namespace MWLua
                     throw std::runtime_error("campaign.write: failed writing " + tmp.string());
             }
             std::filesystem::rename(tmp, file);
+        };
+
+        // THE MAP MEMORY OF A PROFILE (mapmemory.hpp): the records the engine
+        // keeps only in a savegame -- explored world map, visited places,
+        // custom markers, quick keys, selected spell, every cell's fog --
+        // written to and read from a file of their own under mp-maps/.
+        // False when this process has no map to speak of (the dedicated
+        // server) or, on load, no file. The last name saved under is written
+        // once more by the engine itself at quit, while the world is whole.
+        // The name is checked here, in the caller's frame, so a bad one is a
+        // Lua error; the work itself is QUEUED like every other engine
+        // mutation (the GUI and the scene are main-thread property and Lua may
+        // be running off it), and a failure inside it is logged by the queue.
+        // saveMap answers true for 'queued'; loadMap answers whether there is a
+        // file to read, and reads it when there is.
+        api["saveMap"] = [context](std::string_view name) -> bool {
+            const std::filesystem::path file = mapFileFor(context, name);
+            context.mLuaManager->addAction(
+                [file, manager = context.mLuaManager] {
+                    saveMapMemory(file);
+                    manager->setMapMemoryFile(file);
+                },
+                "saveMap");
+            return true;
+        };
+
+        api["loadMap"] = [context](std::string_view name) -> bool {
+            const std::filesystem::path file = mapFileFor(context, name);
+            if (!std::filesystem::exists(file))
+                return false;
+            context.mLuaManager->addAction([file] { loadMapMemory(file); }, "loadMap");
+            return true;
         };
 
         api["read"] = [context, serializer](std::string_view name, sol::this_state s) -> sol::object {

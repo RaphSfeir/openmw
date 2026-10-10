@@ -54,6 +54,10 @@ namespace MWLua
         // file bindings (openmw.campaign) can write next to global_storage.bin.
         const std::filesystem::path& userConfigPath() const { return mUserConfigPath; }
 
+        // The map memory file the last saveMap named (mapmemory.hpp).
+        void setMapMemoryFile(const std::filesystem::path& file) { mMapMemoryFile = file; }
+        void saveMapMemoryAgain(bool forget) override;
+
         // \brief Executes lua handlers. Defaults to running in parallel with OSG Cull.
         //
         // The OSG Cull is expensive enough that we have "free" time to
@@ -134,11 +138,11 @@ namespace MWLua
         void actorDied(const MWWorld::Ptr& actor) override;
         void onDialogueResponse(
             const MWWorld::Ptr& actor, const ESM::DialInfo& info, const ESM::Dialogue& record) override;
+        void onPersuasionClaimed(const MWWorld::Ptr& actor, int type) override;
         void applyMagicEffects(ESM::RefId id, const MWWorld::Ptr& caster, ESM::RefNum item, const MWWorld::Ptr& target,
             const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption, bool stackable,
             bool isReflect) override;
         void magicProjectileHit(ESM::RefId spellId, const MWWorld::Ptr& caster, ESM::RefNum item,
-        void onPersuasionClaimed(const MWWorld::Ptr& actor, int type) override;
             const MWWorld::Ptr& victim, const osg::Vec3f& position, const osg::Vec3f& normal) override;
 
         MWBase::LuaManager::ActorControls* getActorControls(const MWWorld::Ptr&) const override;
@@ -287,6 +291,7 @@ namespace MWLua
         LuaUtil::LuaStorage mGlobalStorage;
         LuaUtil::LuaStorage mPlayerStorage;
         std::filesystem::path mUserConfigPath;
+        std::filesystem::path mMapMemoryFile; // the last openmw.campaign.saveMap target (mapmemory.hpp)
 
         LuaUtil::InputAction::Registry mInputActions;
         LuaUtil::InputTrigger::Registry mInputTriggers;

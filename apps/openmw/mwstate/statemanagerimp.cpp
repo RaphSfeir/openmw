@@ -54,6 +54,9 @@ void MWState::StateManager::cleanup(bool force)
 {
     if (mState != State_NoGame || force)
     {
+        // MP: the map memory, once more, while the world is still whole.
+        if (mState == State_Running)
+            MWBase::Environment::get().getLuaManager()->saveMapMemoryAgain(true);
         MWBase::Environment::get().getSoundManager()->clear();
         MWBase::Environment::get().getDialogueManager()->clear();
         MWBase::Environment::get().getJournal()->clear();

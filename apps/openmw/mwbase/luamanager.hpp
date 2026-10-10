@@ -133,6 +133,11 @@ namespace MWBase
         virtual void uiModeChanged(const MWWorld::Ptr& arg) = 0;
         virtual void viewportResized(int width, int height) = 0;
         virtual void savePermanentStorage(const std::filesystem::path& userConfigPath) = 0;
+        // MP: write the map memory once more, to the file the last
+        // openmw.campaign.saveMap named, while the world is still whole:
+        // at quit, and before a running game is cleared. `forget` drops the
+        // name afterwards, so a later game never writes over it.
+        virtual void saveMapMemoryAgain(bool forget) = 0;
         virtual void applyMagicEffects(ESM::RefId id, const MWWorld::Ptr& caster, ESM::RefNum item,
             const MWWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
             bool stackable, bool isReflect)

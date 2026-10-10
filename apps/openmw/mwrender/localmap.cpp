@@ -1,5 +1,6 @@
 #include "localmap.hpp"
 
+#include <cmath>
 #include <cstdint>
 
 #include <osg/ComputeBoundsVisitor>
@@ -652,6 +653,89 @@ namespace MWRender
 
         createFogOfWarTexture();
         mHasFogState = true;
+    }
+
+    void LocalMap::MapSegment::reloadFogOfWar(const ESM::FogTexture& esm)
+    {
+        const std::vector<char>& data = esm.mImageData;
+        if (data.empty() || !mFogOfWarImage)
+        {
+            loadFogOfWar(esm);
+            return;
+        }
+
+        osgDB::ReaderWriter* readerwriter = osgDB::Registry::instance()->getReaderWriterForExtension("png");
+        if (!readerwriter)
+        {
+            Log(Debug::Error) << "Error: Unable to reload fog, can't find a png ReaderWriter";
+            return;
+        }
+
+        Files::IMemStream in(data.data(), data.size());
+        osgDB::ReaderWriter::ReadResult result = readerwriter->readImage(in);
+        if (!result.success())
+        {
+            Log(Debug::Error) << "Error: Failed to reload fog: " << result.message() << " code " << result.status();
+            return;
+        }
+
+        osg::ref_ptr<osg::Image> image = result.getImage();
+        image->flipVertical();
+        // The same picture, so the same bytes: copied into the image the drawn
+        // texture already holds. A picture of another size replaces it.
+        if (image->getTotalSizeInBytes() == mFogOfWarImage->getTotalSizeInBytes() && image->s() == mFogOfWarImage->s()
+            && image->t() == mFogOfWarImage->t() && image->getPixelFormat() == mFogOfWarImage->getPixelFormat()
+            && image->getDataType() == mFogOfWarImage->getDataType())
+        {
+            memcpy(mFogOfWarImage->data(), image->data(), image->getTotalSizeInBytes());
+            mFogOfWarImage->dirty();
+        }
+        else
+        {
+            mFogOfWarImage = image;
+            mFogOfWarImage->dirty();
+            if (mFogOfWarTexture)
+                mFogOfWarTexture->setImage(mFogOfWarImage);
+            else
+                createFogOfWarTexture();
+        }
+        mHasFogState = true;
+    }
+
+    void LocalMap::reloadFogOfWar(const MWWorld::CellStore* cell)
+    {
+        const ESM::FogState* fog = cell->getFog();
+        if (fog == nullptr || fog->mFogTextures.empty())
+            return;
+        if (cell->getCell()->isExterior())
+        {
+            if (mInterior)
+                return;
+            const auto it
+                = mExteriorSegments.find(std::make_pair(cell->getCell()->getGridX(), cell->getCell()->getGridY()));
+            if (it == mExteriorSegments.end())
+                return;
+            it->second.reloadFogOfWar(fog->mFogTextures.front());
+            return;
+        }
+        if (!mInterior)
+            return;
+        // Drawn from the same bounds the memory was saved with, or the stored
+        // segments do not line up with the drawn ones (requestInteriorMap
+        // offsets them); then the next entry draws it from the memory instead.
+        const float tolerance = 1.f;
+        if (std::abs(fog->mBounds.mMinX - mBounds.xMin()) > tolerance
+            || std::abs(fog->mBounds.mMinY - mBounds.yMin()) > tolerance)
+        {
+            Log(Debug::Warning) << "Map memory: the interior's stored fog has other bounds; shown on the next entry";
+            return;
+        }
+        for (const ESM::FogTexture& texture : fog->mFogTextures)
+        {
+            const auto it = mInteriorSegments.find(std::make_pair(texture.mX, texture.mY));
+            if (it != mInteriorSegments.end())
+                it->second.reloadFogOfWar(texture);
+        }
     }
 
     void LocalMap::MapSegment::saveFogOfWar(ESM::FogTexture& fog) const

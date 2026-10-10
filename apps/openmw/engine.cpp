@@ -1114,6 +1114,10 @@ void OMW::Engine::go()
 
     mLuaWorker->join();
 
+    // MP: the map memory, once more, before anything is torn down.
+    if (mStateManager->getState() == MWBase::StateManager::State_Running)
+        mLuaManager->saveMapMemoryAgain(false);
+
     // Save user settings
     Settings::Manager::saveUser(mCfgMgr.getUserConfigPath() / "settings.cfg");
     Settings::ShaderManager::get().save();

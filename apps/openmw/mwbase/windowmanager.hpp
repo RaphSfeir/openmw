@@ -382,6 +382,11 @@ namespace MWBase
         virtual void addCell(MWWorld::CellStore* cell) = 0;
         virtual void removeCell(MWWorld::CellStore* cell) = 0;
         virtual void writeFog(MWWorld::CellStore* cell) = 0;
+        // MP: the map memory (mwlua/mapmemory.hpp). A drawn cell's fog was
+        // replaced in its store: show it. Custom markers were added without
+        // the event: show them.
+        virtual void reloadFog(MWWorld::CellStore* cell) = 0;
+        virtual void customMarkersChanged() = 0;
 
         virtual const MWGui::TextColours& getTextColours() = 0;
 

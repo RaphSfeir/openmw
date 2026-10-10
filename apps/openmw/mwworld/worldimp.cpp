@@ -13,6 +13,7 @@
 
 #include <components/debug/debuglog.hpp>
 
+#include <components/esm/fourcc.hpp>
 #include <components/esm3/cellref.hpp>
 #include <components/esm3/esmreader.hpp>
 #include <components/esm3/esmwriter.hpp>
@@ -395,6 +396,44 @@ namespace MWWorld
     size_t World::countSavedGameCells() const
     {
         return mWorldModel.countSavedGameRecords();
+    }
+
+    void World::writeFogRecords(ESM::ESMWriter& writer)
+    {
+        // Active cells could have a dirty fog of war, sync it to the CellStore first
+        for (CellStore* cellstore : mWorldScene->getActiveCells())
+            MWBase::Environment::get().getWindowManager()->writeFog(cellstore);
+
+        // Every cell store, loaded or not: a cell read from the file and not
+        // visited since still holds its memory, and must keep it.
+        mWorldModel.forEachLoadedCellStore([&](CellStore& cell) {
+            if (cell.getFog() == nullptr)
+                return;
+            writer.startRecord(ESM::fourCC("MPFG"));
+            writer.writeCellId(cell.getCell()->getId());
+            cell.writeFog(writer);
+            writer.endRecord(ESM::fourCC("MPFG"));
+        });
+    }
+
+    bool World::readFogRecord(ESM::ESMReader& reader)
+    {
+        const ESM::RefId id = reader.getCellId();
+        CellStore* const cell = mWorldModel.findCell(id, false);
+        if (cell == nullptr)
+        {
+            Log(Debug::Warning) << "Dropping map memory for cell " << id << " (cell no longer exists)";
+            reader.skipRecord();
+            return false;
+        }
+        cell->readFog(reader);
+        if (mWorldScene->getActiveCells().count(cell) == 0)
+            return false; // drawn from this memory when it next comes into view
+        // Already drawn, with no memory: the drawn segments take the memory in
+        // place. NOT removeCell/addCell -- that is the unload path, which
+        // writes the live fog back over what was just read and redraws nothing.
+        MWBase::Environment::get().getWindowManager()->reloadFog(cell);
+        return true;
     }
 
     void World::write(ESM::ESMWriter& writer, Loading::Listener& progress) const

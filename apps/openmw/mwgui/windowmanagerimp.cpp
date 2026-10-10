@@ -2590,6 +2590,16 @@ namespace MWGui
         mLocalMapRender->saveFogOfWar(cell);
     }
 
+    void WindowManager::reloadFog(MWWorld::CellStore* cell)
+    {
+        mLocalMapRender->reloadFogOfWar(cell);
+    }
+
+    void WindowManager::customMarkersChanged()
+    {
+        mCustomMarkers.eventMarkersChanged();
+    }
+
     const MWGui::TextColours& WindowManager::getTextColours()
     {
         return mTextColours;

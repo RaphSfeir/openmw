@@ -175,6 +175,15 @@ namespace MWBase
 
         virtual void readRecord(ESM::ESMReader& reader, uint32_t type) = 0;
 
+        // MP: the local map's memory -- the fog of war of every cell the
+        // player has seen -- written to and read back from a file of its own
+        // (openmw.campaign saveMap/loadMap), apart from any savegame, which
+        // multiplayer never loads. One 'MPFG' record per cell that has fog.
+        virtual void writeFogRecords(ESM::ESMWriter& writer) = 0;
+        // Reads one 'MPFG' record. True when the cell was drawn at the time
+        // and its drawn fog was replaced in place (WindowManager::reloadFog).
+        virtual bool readFogRecord(ESM::ESMReader& reader) = 0;
+
         virtual void useDeathCamera() = 0;
 
         virtual void setWaterHeight(const float height) = 0;
