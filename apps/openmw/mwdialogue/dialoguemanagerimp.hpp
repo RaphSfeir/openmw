@@ -3,6 +3,8 @@
 
 #include "../mwbase/dialoguemanager.hpp"
 
+#include <array>
+#include <atomic>
 #include <map>
 #include <optional>
 #include <set>
@@ -63,6 +65,11 @@ namespace MWDialogue
         int mCurrentDisposition;
         int mPermanentDispositionChange;
 
+        // MP: which persuasions a script answers instead of the engine --
+        // admire, intimidate, taunt, bribe (its three tiers are one). Atomic:
+        // claimed from the Lua thread, read on the GUI's.
+        std::array<std::atomic<bool>, 4> mPersuasionClaimed{};
+
         const MWDialogue::KeywordSearch& getKeywordSearch() const;
         std::vector<ESM::RefId> parseTopicIdsFromText(const std::string& text) const;
         void addTopicsFromText(const std::string& text);
@@ -115,6 +122,7 @@ namespace MWDialogue
         void questionAnswered(int answer, ResponseCallback* callback) override;
 
         void persuade(int type, ResponseCallback* callback) override;
+        void setPersuasionClaimed(std::string_view action, bool claimed) override;
 
         /// @note Controlled by an option, gets discarded when dialogue ends by default
         void applyBarterDispositionChange(int delta) override;

@@ -4,6 +4,7 @@
 #include <list>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 
 #include <components/debug/debuglog.hpp>
 
@@ -79,6 +80,8 @@ namespace MWDialogue
         mPermanentDispositionChange = 0;
         mKeywordSearch.clear();
         mKeywordSearchInitialized = false;
+        for (std::atomic<bool>& claimed : mPersuasionClaimed)
+            claimed.store(false);
     }
 
     void DialogueManager::addTopic(const ESM::RefId& topic)
@@ -535,8 +538,58 @@ namespace MWDialogue
         mGoodbye = true;
     }
 
+    namespace
+    {
+        // MP: the four persuasions a script can claim; the three bribe tiers
+        // are one claim, as they are one button row.
+        int persuasionGroup(int type)
+        {
+            switch (type)
+            {
+                case MWBase::MechanicsManager::PT_Admire:
+                    return 0;
+                case MWBase::MechanicsManager::PT_Intimidate:
+                    return 1;
+                case MWBase::MechanicsManager::PT_Taunt:
+                    return 2;
+                default:
+                    return 3;
+            }
+        }
+
+        int persuasionGroupOf(std::string_view action)
+        {
+            if (action == "admire")
+                return 0;
+            if (action == "intimidate")
+                return 1;
+            if (action == "taunt")
+                return 2;
+            if (action == "bribe")
+                return 3;
+            return -1;
+        }
+    }
+
+    void DialogueManager::setPersuasionClaimed(std::string_view action, bool claimed)
+    {
+        const int group = persuasionGroupOf(action);
+        if (group < 0)
+            throw std::invalid_argument(
+                "Unknown persuasion '" + std::string(action) + "': expected admire, intimidate, taunt or bribe");
+        mPersuasionClaimed[group].store(claimed);
+    }
+
     void DialogueManager::persuade(int type, ResponseCallback* callback)
     {
+        // MP: a claimed persuasion is the script's to answer, whole: no roll, no
+        // skill use, no gold, no response line (setPersuasionClaimed).
+        if (mPersuasionClaimed[persuasionGroup(type)].load())
+        {
+            MWBase::Environment::get().getLuaManager()->onPersuasionClaimed(mActor, type);
+            return;
+        }
+
         bool success;
         int temp, perm;
         MWBase::Environment::get().getMechanicsManager()->getPersuasionDispositionChange(

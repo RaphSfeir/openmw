@@ -80,6 +80,18 @@
 -- @param #number value The difficulty (the options menu's range is -100..100), or nil to lift the order.
 
 ---
+-- Claim a persuasion for scripts (global scripts only): while claimed, the
+-- engine rolls nothing, changes no disposition, moves no gold and shows no
+-- response when the player chooses that button; the player's scripts get
+-- the `PersuasionClaimed` event instead and answer it. Claims are cleared
+-- with the dialogue state at every new game, so claim when your script
+-- boots. Throws on an unknown action.
+-- @function [parent=#core] setPersuasionClaimed
+-- @param #string action `"admire"`, `"intimidate"`, `"taunt"` or `"bribe"` (all three bribe amounts).
+-- @param #boolean claimed
+-- @usage core.setPersuasionClaimed('admire', true)
+
+---
 -- Return l10n formatting function for the given context.
 -- Localisation files (containing the message names and translations) should be stored in
 -- VFS as files of the form `l10n/<ContextName>/<Locale>.yaml`.

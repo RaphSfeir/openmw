@@ -124,6 +124,10 @@ namespace MWBase
         virtual void onDialogueResponse(
             const MWWorld::Ptr& actor, const ESM::DialInfo& info, const ESM::Dialogue& record)
             = 0;
+        // MP: the player chose a persuasion a script has claimed
+        // (DialogueManager::setPersuasionClaimed). The engine did nothing with
+        // it; the player's scripts get 'PersuasionClaimed' and answer it.
+        virtual void onPersuasionClaimed(const MWWorld::Ptr& actor, int type) = 0;
         virtual void questUpdated(const ESM::RefId& questId, int stage) = 0;
         // `arg` is either forwarded from MWGui::pushGuiMode or empty
         virtual void uiModeChanged(const MWWorld::Ptr& arg) = 0;

@@ -29,6 +29,21 @@ It returns a lua table with the following fields:
         end
     }
 
+**PersuasionClaimed**
+
+This event is sent to the player's local script when the player chooses a persuasion that a global script has claimed with :ref:`setPersuasionClaimed <openmw.core>` (an admire, intimidate, taunt or bribe button). The engine has done nothing with it: no roll, no disposition change, no gold moved, no response shown. The script answers it.
+It returns a lua table with the following fields:
+- ``actor``: The actor being persuaded.
+- ``action``: ``"admire"``, ``"intimidate"``, ``"taunt"``, ``"bribe10"``, ``"bribe100"`` or ``"bribe1000"``.
+
+.. code-block:: Lua
+
+    eventHandlers = {
+        PersuasionClaimed = function(e)
+            print('the player chose', e.action, 'on', e.actor)
+        end
+    }
+
 **Died**
 
 This event is sent to an actor's local script when that actor dies.

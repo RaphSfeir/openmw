@@ -12,6 +12,7 @@
 #include <components/misc/strings/lower.hpp>
 #include <components/version/version.hpp>
 
+#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/environment.hpp"
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/world.hpp"
@@ -181,6 +182,16 @@ namespace MWLua
         {
             api["setGameDifficulty"] = [](sol::optional<int> value) {
                 setDifficultyOverride(value ? std::optional<int>(*value) : std::nullopt);
+            };
+            // mp: a persuasion overhaul claims the buttons it answers itself
+            // ('admire', 'intimidate', 'taunt', 'bribe'); the engine then rolls
+            // nothing for them and only sends 'PersuasionClaimed' to the
+            // player's scripts. Global only, like the difficulty: what a
+            // persuasion does is a rule of the game, not of one player. Reset
+            // with the dialogue state at every new game, so a mod re-claims
+            // when it boots.
+            api["setPersuasionClaimed"] = [](std::string_view action, bool claimed) {
+                MWBase::Environment::get().getDialogueManager()->setPersuasionClaimed(action, claimed);
             };
         }
 

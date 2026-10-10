@@ -22,6 +22,7 @@
 #include <components/lua_ui/registerscriptsettings.hpp>
 #include <components/lua_ui/util.hpp>
 
+#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -538,6 +539,57 @@ namespace MWLua
 
     void LuaManager::applyMagicEffects(ESM::RefId id, const MWWorld::Ptr& caster, ESM::RefNum item,
         const MWWorld::Ptr& target, const std::vector<int>& effects, bool ignoreReflect, bool ignoreSpellAbsorption,
+    void LuaManager::saveMapMemoryAgain(bool forget)
+    {
+        if (mMapMemoryFile.empty())
+            return;
+        try
+        {
+            saveMapMemory(mMapMemoryFile);
+            Log(Debug::Info) << "Map memory written at the end: " << mMapMemoryFile;
+        }
+        catch (const std::exception& e)
+        {
+            Log(Debug::Error) << "Map memory not written at the end: " << e.what();
+        }
+        if (forget)
+            mMapMemoryFile.clear();
+    }
+
+    void LuaManager::onPersuasionClaimed(const MWWorld::Ptr& actor, int type)
+    {
+        // Not a DialogueResponse: there is no response record to name, and a
+        // script reading recordId off that event must not meet nil.
+        std::string_view action;
+        switch (type)
+        {
+            case MWBase::MechanicsManager::PT_Admire:
+                action = "admire";
+                break;
+            case MWBase::MechanicsManager::PT_Intimidate:
+                action = "intimidate";
+                break;
+            case MWBase::MechanicsManager::PT_Taunt:
+                action = "taunt";
+                break;
+            case MWBase::MechanicsManager::PT_Bribe10:
+                action = "bribe10";
+                break;
+            case MWBase::MechanicsManager::PT_Bribe100:
+                action = "bribe100";
+                break;
+            default:
+                action = "bribe1000";
+                break;
+        }
+        mLua.protectedCall([&](LuaUtil::LuaView& view) {
+            sol::table data = view.newTable();
+            data["actor"] = LObject(actor);
+            data["action"] = action;
+            sendLocalEvent(mPlayer, "PersuasionClaimed", data);
+        });
+    }
+
         bool stackable, bool isReflect)
     {
         if (!target.isEmpty() && !effects.empty())

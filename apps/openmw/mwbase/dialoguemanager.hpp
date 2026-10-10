@@ -104,6 +104,13 @@ namespace MWBase
         virtual bool checkServiceRefused(ResponseCallback* callback, ServiceType service = ServiceType::Any) = 0;
 
         virtual void persuade(int type, ResponseCallback* callback) = 0;
+        // MP: a Lua global script may CLAIM a persuasion -- 'admire',
+        // 'intimidate', 'taunt' or 'bribe' (all three tiers) -- and answer it
+        // itself. For a claimed one persuade() rolls nothing, writes nothing
+        // and shows no response: it only tells the player's scripts
+        // (LuaManager::onPersuasionClaimed). Claims clear with the rest of the
+        // dialogue state at a new game. Throws on an unknown action.
+        virtual void setPersuasionClaimed(std::string_view action, bool claimed) = 0;
 
         /// @note Controlled by an option, gets discarded when dialogue ends by default
         virtual void applyBarterDispositionChange(int delta) = 0;
