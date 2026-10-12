@@ -1451,6 +1451,7 @@
 -- @param self
 -- @param #number stage Quest stage
 -- @param openmw.core#GameObject actor (optional) The actor who is the source of the journal entry, it may be used in journal entries with variables such as `%name(The speaker's name)` or `%race(The speaker's race)`.
+-- @param #number daysPassed (optional) Date the entry as of this day (the `dayspassed` count) instead of today; the calendar day and month are the ones that day falls on. Multiplayer uses it to write a replayed journal back with its real dates.
 
 ---
 -- Get state of a control switch. I.e. is the player able to move/fight/jump/etc.

@@ -1,5 +1,6 @@
 #include "journalimp.hpp"
 
+#include <functional>
 #include <iterator>
 
 #include <components/esm3/esmreader.hpp>
@@ -10,6 +11,7 @@
 #include <components/misc/strings/algorithm.hpp>
 
 #include "../mwworld/class.hpp"
+#include "../mwworld/datetimemanager.hpp"
 #include "../mwworld/esmstore.hpp"
 
 #include "../mwbase/environment.hpp"
@@ -80,6 +82,21 @@ namespace MWDialogue
 
     void Journal::addEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor)
     {
+        addStampedEntry(id, index, [&] { return StampedJournalEntry::makeFromQuest(id, index, actor); });
+    }
+
+    void Journal::addDatedEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor, int daysPassed)
+    {
+        addStampedEntry(id, index, [&] {
+            int day = 0, month = 0, year = 0;
+            MWBase::Environment::get().getWorld()->getTimeManager()->calendarAt(daysPassed, day, month, year);
+            return StampedJournalEntry(id, JournalEntry::idFromIndex(id, index), daysPassed, month, day, actor);
+        });
+    }
+
+    void Journal::addStampedEntry(
+        const ESM::RefId& id, int index, const std::function<StampedJournalEntry()>& makeEntry)
+    {
         // bail out if we already have heard this...
         const ESM::RefId& infoId = JournalEntry::idFromIndex(id, index);
         for (const JournalEntry& entry : mJournal)
@@ -93,7 +110,7 @@ namespace MWDialogue
                 return;
             }
 
-        StampedJournalEntry entry = StampedJournalEntry::makeFromQuest(id, index, actor);
+        StampedJournalEntry entry = makeEntry();
 
         Quest& quest = getOrStartQuest(id);
         if (quest.addEntry(entry)) // we are doing slicing on purpose here

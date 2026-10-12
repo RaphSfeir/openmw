@@ -52,6 +52,11 @@ namespace MWBase
         ///< Gets a pointer to the requested quest. Will return nullptr if the quest has not been started.
 
         virtual void addEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor) = 0;
+        // MP: the same entry, dated as of `daysPassed` rather than today: the
+        // calendar day and month are the ones that day falls on, counted from
+        // the current date. A campaign replayed into a fresh game writes its
+        // journal back with the dates the stages were really reached.
+        virtual void addDatedEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor, int daysPassed) = 0;
         ///< Add a journal entry.
         /// @param actor Used as context for replacing of escape sequences (%name, etc).
 

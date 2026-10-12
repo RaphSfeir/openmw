@@ -24,6 +24,8 @@ namespace MWWorld
         // Note that game time generally goes faster than the simulation time.
         std::string_view getMonthName(int month = -1) const; // -1: current month
         TimeStamp getTimeStamp() const;
+        // MP: the calendar date a `dayspassed` count falls on, from today's.
+        void calendarAt(int daysPassed, int& day, int& month, int& year) const;
         ESM::EpochTimeStamp getEpochTimeStamp() const;
         double getGameTime() const { return (static_cast<double>(mDaysPassed) * 24 + mGameHour) * 3600.0; }
         float getGameTimeScale() const { return mGameTimeScale; }

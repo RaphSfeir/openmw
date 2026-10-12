@@ -1,6 +1,8 @@
 #ifndef GAME_MWDIALOG_JOURNAL_H
 #define GAME_MWDIALOG_JOURNAL_H
 
+#include <functional>
+
 #include "../mwbase/journal.hpp"
 
 #include "quest.hpp"
@@ -28,9 +30,15 @@ namespace MWDialogue
         ///< Gets a pointer to the requested quest. Will return nullptr if the quest has not been started.
 
         Quest& getOrStartQuest(const ESM::RefId& id) override;
+
+        // MP: the one body behind addEntry and addDatedEntry; `makeEntry` is
+        // only called once the entry is known to be new.
+        void addStampedEntry(
+            const ESM::RefId& id, int index, const std::function<StampedJournalEntry()>& makeEntry);
         ///< Gets the quest requested. Attempts to create it and inserts it in quests if it is not yet started.
 
         void addEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor) override;
+        void addDatedEntry(const ESM::RefId& id, int index, const MWWorld::Ptr& actor, int daysPassed) override;
         ///< Add a journal entry.
         /// @param actor Used as context for replacing of escape sequences (%name, etc).
 

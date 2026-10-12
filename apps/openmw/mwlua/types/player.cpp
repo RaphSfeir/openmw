@@ -361,20 +361,27 @@ namespace MWLua
                     [q, finished, journal] { journal->getOrStartQuest(q.mQuestId).setFinished(finished); },
                     "setQuestFinishedAction");
             });
-        quest["addJournalEntry"] = [context](const Quest& q, int stage, sol::optional<GObject> actor) {
-            if (!q.mMutable)
-                throw std::runtime_error("Can only be used in global or player scripts!");
-            // The journal mwscript function has a try function here, we will make the lua function throw an
-            // error. However, the addAction will cause it to error outside of this function.
-            context.mLuaManager->addAction(
-                [actor = std::move(actor), q, stage] {
-                    MWWorld::Ptr actorPtr;
-                    if (actor)
-                        actorPtr = actor->ptr();
-                    MWBase::Environment::get().getJournal()->addEntry(q.mQuestId, stage, actorPtr);
-                },
-                "addJournalEntryAction");
-        };
+        // MP: an optional `daysPassed` dates the entry as of that day instead
+        // of today (a campaign replayed into a fresh game keeps its dates).
+        quest["addJournalEntry"]
+            = [context](const Quest& q, int stage, sol::optional<GObject> actor, sol::optional<int> daysPassed) {
+                  if (!q.mMutable)
+                      throw std::runtime_error("Can only be used in global or player scripts!");
+                  // The journal mwscript function has a try function here, we will make the lua function throw an
+                  // error. However, the addAction will cause it to error outside of this function.
+                  context.mLuaManager->addAction(
+                      [actor = std::move(actor), q, stage, daysPassed] {
+                          MWWorld::Ptr actorPtr;
+                          if (actor)
+                              actorPtr = actor->ptr();
+                          if (daysPassed)
+                              MWBase::Environment::get().getJournal()->addDatedEntry(
+                                  q.mQuestId, stage, actorPtr, *daysPassed);
+                          else
+                              MWBase::Environment::get().getJournal()->addEntry(q.mQuestId, stage, actorPtr);
+                      },
+                      "addJournalEntryAction");
+              };
 
         player["CONTROL_SWITCH"]
             = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, std::string_view>(lua,

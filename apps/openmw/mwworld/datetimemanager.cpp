@@ -64,6 +64,58 @@ namespace MWWorld
         mPausedTags.clear();
     }
 
+    // MP: the calendar date `daysPassed` falls on, counted from today's date
+    // -- forwards or backwards -- with the same month lengths the calendar
+    // itself walks. Used to write a replayed journal back with its real dates.
+    void DateTimeManager::calendarAt(int daysPassed, int& day, int& month, int& year) const
+    {
+        int delta = daysPassed - mDaysPassed;
+        day = mDay;
+        month = mMonth;
+        year = mYear;
+        // A corrupt count must not walk the calendar a million years: beyond
+        // a few centuries either way the date is today's.
+        if (delta > 365 * 300 || delta < -365 * 300)
+            delta = 0;
+        while (delta > 0)
+        {
+            const int daysInMonth = getDaysPerMonth(month);
+            if (day + delta <= daysInMonth)
+            {
+                day += delta;
+                delta = 0;
+            }
+            else
+            {
+                delta -= daysInMonth - day + 1;
+                day = 1;
+                if (++month > 11)
+                {
+                    month = 0;
+                    ++year;
+                }
+            }
+        }
+        while (delta < 0)
+        {
+            if (day + delta >= 1)
+            {
+                day += delta;
+                delta = 0;
+            }
+            else
+            {
+                delta += day;
+                if (--month < 0)
+                {
+                    month = 11;
+                    --year;
+                }
+                day = getDaysPerMonth(month);
+            }
+        }
+    }
+
     void DateTimeManager::setHour(double hour)
     {
         if (hour < 0)
